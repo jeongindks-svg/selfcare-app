@@ -3,10 +3,10 @@
   "short_name": "자기관리",
   "description": "러닝·팔굽혀펴기·수면·가계부·신앙 기록과 Growth 점수",
   "lang": "ko",
-  "start_url": "./",
+  "id": "/?app=growth-v2",
+  "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
   "background_color": "#F2F2F7",
   "theme_color": "#F2F2F7",
   "icons": [

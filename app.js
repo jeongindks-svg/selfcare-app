@@ -1,4 +1,5 @@
 'use strict';
+const APP_VERSION = 9;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1393,7 +1394,8 @@ function viewSettings() {
   const vp = viewportSize();
   h += '<!--col-->' + glabel('화면') + '<div class="seg" role="group" aria-label="화면 모드">' + [['auto', '자동'], ['light', '라이트'], ['dark', '다크']].map(x => '<button type="button" data-act="theme" data-arg="' + x[0] + '" aria-pressed="' + (S.theme === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   h += glabel('화면 배치 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="화면 배치">' + [['auto', '자동'], ['phone', '폰'], ['tablet', '태블릿']].map(x => '<button type="button" data-act="layoutPref" data-arg="' + x[0] + '" aria-pressed="' + (LAYOUT_PREF === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
-    '<p class="subline">지금 화면 크기 ' + vp.w + ' × ' + vp.h + ' · ' + LAYOUT_NAME[LAYOUT] + '</p>';
+    '<p class="subline">지금 화면 크기 ' + vp.w + ' × ' + vp.h + ' · ' + LAYOUT_NAME[LAYOUT] + '</p>' +
+    '<p class="subline">앱 버전 ' + APP_VERSION + ' · ' + (isStandalone() ? '설치한 앱' : '브라우저') + (deviceOrientation() ? ' · 기기 방향 ' + deviceOrientation() : '') + '</p>';
   let sy = '<section class="group"><div class="dnote">' + esc(syncStatusText()) + '</div>';
   if (PROV) sy += '<button type="button" class="drow" data-act="syncNow">지금 동기화</button>' + (PROV.name === 'gist' ? '<button type="button" class="drow danger" data-act="syncOff">이 기기 연결 해제</button>' : '');
   else if (!inClaude()) sy += '<button type="button" class="drow" data-act="syncSetup">다른 기기와 연결하기</button><div class="dnote">폰·태블릿·컴퓨터를 같은 GitHub 계정으로 연결하면 기록이 자동으로 이어져요. 기록은 비밀번호로 암호화돼요.</div>';
@@ -2325,6 +2327,13 @@ function applyLayout() {
   r.setAttribute('data-layout', m);
   if (m === 'phone') r.removeAttribute('data-side'); else r.setAttribute('data-side', '');
   return m;
+}
+function isStandalone() {
+  return (typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (typeof navigator !== 'undefined' && navigator.standalone === true);
+}
+function deviceOrientation() {
+  const t = typeof screen !== 'undefined' && screen.orientation && screen.orientation.type;
+  return t ? (/landscape/.test(t) ? '가로' : '세로') : '';
 }
 const LAYOUT_NAME = { phone: '폰 (한 줄)', wide: '태블릿 (넓은 한 줄)', two: '태블릿 (2단)' };
 function layout(html) {
