@@ -110,12 +110,8 @@ function loadLocal() {
   return null;
 }
 function saveLocal() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
-function commit() { S.updatedAt = Date.now(); VER++; saveLocal(); queueRemote(); }
+function commit() { S.updatedAt = Date.now(); VER++; saveLocal(); queueSync(); }
 
-/* 이 버전은 서버 없이 브라우저(localStorage)에만 저장해요. */
-let SYNC = 'local';
-function queueRemote() {}
-function initRemote() {}
 
 /* ================= 인덱스 & 지표 ================= */
 let IX = { ver: -1 };
@@ -170,7 +166,7 @@ function applyFixed() {
       const p = ym.split('-').map(Number), last = new Date(p[0], p[1], 0).getDate();
       const d = ym + '-' + PAD(Math.min(f.day, last));
       if (d > t) break;
-      const rec = { id: uid(), d: d, cat: f.cat, amt: f.amt, memo: f.name, fixed: f.id };
+      const rec = { id: 'fx-' + f.id + '-' + ym, d: d, cat: f.cat, amt: f.amt, memo: f.name, fixed: f.id };
       if (f.sub) rec.sub = f.sub;
       S.logs.exp.push(rec);
       f.applied[ym] = true; changed = true;
@@ -725,6 +721,7 @@ const ICONS = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   review: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   flag: '<path d="M5 21V4M5 5h11l-2 4 2 4H5"/>',
   gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8M8 8a2.5 2.5 0 1 1 0-5c2.5 0 4 3 4 5M16 8a2.5 2.5 0 1 0 0-5c-2.5 0-4 3-4 5"/>'
 };
@@ -841,8 +838,9 @@ function checkRow(c) {
     '<span class="cmark">' + (c.done ? DONE_SVG : TODO_SVG) + '</span><span class="ctext"><span class="ct1">' + esc(c.title) + '</span><span class="ct2">' + esc(c.sub) + '</span></span>' +
     '<span class="cstat' + (c.done ? ' ok' : '') + '">' + (c.done ? '완료' : '남음') + '</span></button>';
 }
+const EDIT_IC = '<span class="eic">' + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span>';
 function entryRow(arg, left, sub, right, cls) {
-  return '<button type="button" class="erow" data-act="editEntry" data-arg="' + esc(arg) + '"><span class="el"><span class="e1">' + left + '</span><span class="e2">' + sub + '</span></span><span class="er' + (cls ? ' ' + cls : '') + '">' + right + '</span></button>';
+  return '<button type="button" class="erow" data-act="editEntry" data-arg="' + esc(arg) + '"><span class="el"><span class="e1">' + left + '</span><span class="e2">' + sub + '</span></span><span class="er' + (cls ? ' ' + cls : '') + '">' + right + '</span>' + EDIT_IC + '</button>';
 }
 const bigBtn = (act, arg, cls, text) => '<button type="button" class="btn full c-' + cls + '" data-act="' + act + '" data-arg="' + arg + '">' + text + '</button>';
 const delta = (a, b) => (a == null || b == null) ? '' : (a - b >= 0 ? '+' : '−') + Math.abs(a - b);
@@ -1117,9 +1115,11 @@ function viewRun(e) {
   const pbMap = {};
   rs.dists.forEach(d => { if (d.bestId) pbMap[d.bestId] = d.D.label + ' 최고'; });
   if (rs.pbPaceId && !pbMap[rs.pbPaceId]) pbMap[rs.pbPaceId] = '최고 페이스';
-  const list = (S.logs.ex[e.id] || []).slice().sort(byDateDesc).slice(0, 8);
-  h += '<section class="group"><div class="gh">최근 기록 <span class="hint">눌러서 수정</span></div>' + (list.length ? list.map(x =>
-    entryRow('ex|' + e.id + '|' + x.id, dateLabel(x.d), exVal(x.v, e) + (x.m > 0 ? ' · ' + fmtMS(x.m) : '') + (pbMap[x.id] ? ' <span class="pbtag">' + pbMap[x.id] + '</span>' : ''), x.m > 0 ? fmtPace(x.m / x.v) + ' /km' : dash)).join('') : '<div class="emptyrow">아직 기록이 없어요. 거리와 시간을 함께 적어 보세요.</div>') + '</section>';
+  const allRuns = (S.logs.ex[e.id] || []).slice().sort(byDateDesc), allOpen = !!NAV.open['all:' + e.id];
+  const list = allOpen ? allRuns.slice(0, 300) : allRuns.slice(0, 8);
+  h += '<section class="group"><div class="gh">최근 기록 <span class="hint">눌러서 수정 · 삭제</span></div>' + (list.length ? list.map(x =>
+    entryRow('ex|' + e.id + '|' + x.id, dateLabel(x.d), exVal(x.v, e) + (x.m > 0 ? ' · ' + fmtMS(x.m) : '') + (pbMap[x.id] ? ' <span class="pbtag">' + pbMap[x.id] + '</span>' : ''), x.m > 0 ? fmtPace(x.m / x.v) + ' /km' : dash)).join('') : '<div class="emptyrow">아직 기록이 없어요. 거리와 시간을 함께 적어 보세요.</div>') +
+    (allRuns.length > 8 ? '<button type="button" class="addrow" data-act="toggleAll" data-arg="' + e.id + '">' + (allOpen ? '접기' : '모든 기록 보기 (' + allRuns.length + ')') + '</button>' : '') + '</section>';
   h += linkSection('exercise');
   return h;
 }
@@ -1222,7 +1222,7 @@ function viewSleep() {
   }
   const list = sleepList().slice().reverse().slice(0, 7);
   h += '<section class="group"><div class="gh">최근 기록 <span class="hint">눌러서 수정</span></div>' + (list.length ? list.map(x =>
-    '<button type="button" class="erow" data-act="logSleep" data-arg="' + x.d + '"><span class="el"><span class="e1">' + dateLabel(x.d) + '</span><span class="e2">' + esc(x.bed) + ' → ' + esc(x.wake) + '</span></span><span class="er">' + fmtDur(x.dur) + (x.score ? ' · ' + x.score + '점' : '') + '</span></button>').join('') : '<div class="emptyrow">아직 기록이 없어요.</div>') + '</section>';
+    '<button type="button" class="erow" data-act="logSleep" data-arg="' + x.d + '"><span class="el"><span class="e1">' + dateLabel(x.d) + '</span><span class="e2">' + esc(x.bed) + ' → ' + esc(x.wake) + '</span></span><span class="er">' + fmtDur(x.dur) + (x.score ? ' · ' + x.score + '점' : '') + '</span>' + EDIT_IC + '</button>').join('') : '<div class="emptyrow">아직 기록이 없어요.</div>') + '</section>';
   h += linkSection('sleep', 2);
   return h;
 }
@@ -1390,9 +1390,15 @@ function viewSettings() {
   if (st.show.money) ls += link('money', '가계부', '월 예산 ' + won(st.monthly));
   if (st.show.faith) ls += link('faith', '신앙', st.faith.filter(f => f.on).length + '개 항목');
   if (ls) h += glabel('분야별 설정') + '<section class="group">' + ls + '</section>';
+  const vp = viewportSize();
   h += '<!--col-->' + glabel('화면') + '<div class="seg" role="group" aria-label="화면 모드">' + [['auto', '자동'], ['light', '라이트'], ['dark', '다크']].map(x => '<button type="button" data-act="theme" data-arg="' + x[0] + '" aria-pressed="' + (S.theme === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
-  h += glabel('데이터') + '<section class="group"><div class="dnote">기록은 이 브라우저에만 저장돼요. 브라우저 데이터를 지우면 사라지니, 가끔 내보내기로 백업해 두세요.</div>' +
-    '<button type="button" class="drow" data-act="seed">예시 데이터 채우기</button><button type="button" class="drow" data-act="exportData">데이터 내보내기 (JSON 백업)</button><button type="button" class="drow" data-act="importData">데이터 가져오기 (JSON 백업)</button><button type="button" class="drow danger" data-act="resetAll">모든 데이터 지우기</button></section>';
+  h += glabel('화면 배치 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="화면 배치">' + [['auto', '자동'], ['phone', '폰'], ['tablet', '태블릿']].map(x => '<button type="button" data-act="layoutPref" data-arg="' + x[0] + '" aria-pressed="' + (LAYOUT_PREF === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<p class="subline">지금 화면 크기 ' + vp.w + ' × ' + vp.h + ' · ' + LAYOUT_NAME[LAYOUT] + '</p>';
+  let sy = '<section class="group"><div class="dnote">' + esc(syncStatusText()) + '</div>';
+  if (PROV) sy += '<button type="button" class="drow" data-act="syncNow">지금 동기화</button>' + (PROV.name === 'gist' ? '<button type="button" class="drow danger" data-act="syncOff">이 기기 연결 해제</button>' : '');
+  else if (!inClaude()) sy += '<button type="button" class="drow" data-act="syncSetup">다른 기기와 연결하기</button><div class="dnote">폰·태블릿·컴퓨터를 같은 GitHub 계정으로 연결하면 기록이 자동으로 이어져요. 기록은 비밀번호로 암호화돼요.</div>';
+  h += glabel('기기 간 동기화') + sy + '</section>';
+  h += glabel('데이터') + '<section class="group"><button type="button" class="drow" data-act="seed">예시 데이터 채우기</button><button type="button" class="drow" data-act="exportData">데이터 내보내기 (JSON 백업)</button><button type="button" class="drow" data-act="importData">데이터 가져오기 (JSON 백업)</button><button type="button" class="drow danger" data-act="resetAll">모든 데이터 지우기</button></section>';
   return h;
 }
 
@@ -1448,28 +1454,74 @@ function confirmSheet(title, msg, label, fn) {
 const done = msg => { commit(); closeSheet(); toast(msg || '저장했어요'); render(); };
 
 /* ---- 운동 기록 (추가·수정) ---- */
+const digits = v => String(v).replace(/[^0-9]/g, '');
+const decimal = v => { const s = String(v).replace(/,/g, '.').replace(/[^0-9.]/g, ''), i = s.indexOf('.'); return i < 0 ? s : s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, ''); };
+function tfield(label, id, value, max) {
+  return '<div class="fld"><label for="' + id + '">' + label + '</label><input id="' + id + '" class="tin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="' + max + '" autocomplete="off" placeholder="0" value="' + esc(value) + '" data-inp="runPrev" data-chg="runNorm"></div>';
+}
+function timeFieldsHtml(v) {
+  if (v.tmode === 'pace') return '<div class="two">' + tfield('1km당 페이스 · 분', 'f-pmin', v.pmin, 3) + tfield('초', 'f-psec', v.psec, 2) + '</div>';
+  return '<div class="two">' + tfield('걸린 시간 · 분', 'f-min', v.min, 3) + tfield('초', 'f-sec', v.sec, 2) + '</div>';
+}
+/* 시트에 지금 보이는 입력 방식 기준으로 거리와 총 시간(초)을 읽어요 */
+function readRun() {
+  const v = SHEET ? SHEET.vals : {}, km = parseFloat(decimal(val('f-val'))) || 0, n = id => parseInt(digits(val(id)), 10) || 0;
+  let sec = 0;
+  if (v.shown === 'pace') sec = Math.round((n('f-pmin') * 60 + n('f-psec')) * km);
+  else sec = n('f-min') * 60 + n('f-sec');
+  return { km: km, sec: sec };
+}
+function runPreviewText(r, mode) {
+  if (!(r.km > 0)) return '거리를 입력하면 페이스를 계산해 드려요.';
+  if (!(r.sec > 0)) return mode === 'pace' ? '페이스를 입력하면 총 시간을 계산해 드려요.' : '시간(분·초)을 입력하면 페이스를 계산해 드려요.';
+  const kmh = r.km / (r.sec / 3600);
+  return mode === 'pace' ? '총 시간 ' + fmtMS(r.sec / 60) + ' · 시속 ' + kmh.toFixed(1) + ' km/h' : '페이스 ' + fmtPace(r.sec / 60 / r.km) + ' /km · 시속 ' + kmh.toFixed(1) + ' km/h';
+}
+function updateRunPreview() { if (!SHEET) return; const el = byId('runprev'); if (el) el.textContent = runPreviewText(readRun(), SHEET.vals.shown); }
+function switchTimeMode() {
+  const v = SHEET.vals, r = readRun();     // 입력칸은 아직 이전 방식이에요
+  v.shown = v.tmode;
+  if (v.tmode === 'pace') { const p = r.km > 0 && r.sec > 0 ? Math.round(r.sec / r.km) : 0; v.pmin = p ? Math.floor(p / 60) : ''; v.psec = p ? p % 60 : ''; }
+  else { v.min = r.sec ? Math.floor(r.sec / 60) : ''; v.sec = r.sec ? r.sec % 60 : ''; }
+  const w = byId('timewrap'); if (w) w.innerHTML = timeFieldsHtml(v);
+  updateRunPreview();
+}
+function sheetLogRun(e, cur, eid, t) {
+  const total = cur && cur.m > 0 ? Math.round(cur.m * 60) : 0;
+  const vals = { tmode: 'time', shown: 'time', min: total ? Math.floor(total / 60) : '', sec: total ? total % 60 : '', pmin: '', psec: '' };
+  const body = field('날짜', 'f-date', 'date', cur ? cur.d : t, 'max="' + t + '"') +
+    '<div class="fld"><label for="f-val">거리 (' + esc(e.unit) + ')</label><input id="f-val" class="tin" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 5.0" value="' + esc(cur ? cur.v : '') + '" data-inp="runPrev"></div>' +
+    '<div class="fld"><label>시간 입력 방식</label>' + chipsHtml('tmode', [{ v: 'time', l: '걸린 시간' }, { v: 'pace', l: '페이스' }], 'time') + '</div>' +
+    '<div id="timewrap">' + timeFieldsHtml(vals) + '</div>' +
+    '<div class="runprev" id="runprev" aria-live="polite">' + esc(runPreviewText({ km: cur ? cur.v : 0, sec: total }, 'time')) + '</div>' +
+    '<p class="fhint">시간은 비워 둬도 돼요. 시간을 적으면 페이스와 거리별 기록이 계산돼요.</p>' + (cur ? delBtn('ex|' + e.id + '|' + eid) : '') + ERR;
+  openSheet(esc(e.name) + (cur ? ' 기록 수정' : ' 기록'), body, () => {
+    const d = val('f-date');
+    if (!d || d > t) return setErr('날짜를 확인해 주세요.');
+    const r = readRun();
+    if (!(r.km > 0)) return setErr('거리를 입력해 주세요.');
+    const rec = cur || { id: uid() };
+    rec.d = d; rec.v = r.km; delete rec.m;
+    if (r.sec > 0) rec.m = r.sec / 60;
+    if (!cur) (S.logs.ex[e.id] = S.logs.ex[e.id] || []).push(rec);
+    done();
+  }, { vals: vals, focus: !cur, onPick: grp => { if (grp === 'tmode') switchTimeMode(); } });
+}
 function sheetLogEx(id, eid) {
   const e = S.settings.exercises.find(x => x.id === id);
   if (!e) return;
   const t = todayStr(), cur = eid ? (S.logs.ex[id] || []).find(x => x.id === eid) : null;
   if (eid && !cur) return;
-  const mi = cur && cur.m > 0 ? Math.floor(Math.round(cur.m * 60) / 60) : '', se = cur && cur.m > 0 ? Math.round(cur.m * 60) % 60 : '';
+  if (e.minutes) return sheetLogRun(e, cur, eid, t);
   const body = field('날짜', 'f-date', 'date', cur ? cur.d : t, 'max="' + t + '"') +
-    field(esc(e.name) + ' (' + esc(e.unit) + ')', 'f-val', 'number', cur ? cur.v : '', 'inputmode="decimal" step="' + (e.decimals ? '0.1' : '1') + '" min="0" placeholder="0"') +
-    (e.minutes ? '<div class="two">' + field('걸린 시간 · 분 (선택)', 'f-min', 'number', mi, 'inputmode="numeric" step="1" min="0" placeholder="0"') + field('초', 'f-sec', 'number', se, 'inputmode="numeric" step="1" min="0" max="59" placeholder="0"') + '</div>' : '') +
-    '<p class="fhint">' + (e.minutes ? '거리와 걸린 시간을 함께 적으면 페이스와 기록이 계산돼요.' : '오늘 합계 ' + exVal(exSum(e.id, t), e) + ' · 주간 목표 ' + exGoal(e.weekly, e)) + '</p>' + (cur ? delBtn('ex|' + id + '|' + eid) : '') + ERR;
+    field(esc(e.name) + ' (' + esc(e.unit) + ')', 'f-val', 'text', cur ? cur.v : '', 'inputmode="decimal" autocomplete="off" placeholder="0" data-inp="num"') +
+    '<p class="fhint">오늘 합계 ' + exVal(exSum(e.id, t), e) + ' · 주간 목표 ' + exGoal(e.weekly, e) + '</p>' + (cur ? delBtn('ex|' + id + '|' + eid) : '') + ERR;
   openSheet(esc(e.name) + (cur ? ' 기록 수정' : ' 기록'), body, () => {
-    const d = val('f-date'), v = parseFloat(val('f-val'));
+    const d = val('f-date'), v = parseFloat(decimal(val('f-val')));
     if (!d || d > t) return setErr('날짜를 확인해 주세요.');
     if (!(v > 0)) return setErr('값을 입력해 주세요.');
     const rec = cur || { id: uid() };
-    rec.d = d; rec.v = v; delete rec.m;
-    if (e.minutes) {
-      const m1 = Math.max(0, parseFloat(val('f-min')) || 0), s1 = Math.max(0, parseFloat(val('f-sec')) || 0);
-      if (s1 > 59) return setErr('초는 0~59 사이로 입력해 주세요.');
-      const total = Math.round(m1 * 60 + s1);
-      if (total > 0) rec.m = total / 60;
-    }
+    rec.d = d; rec.v = v;
     if (!cur) (S.logs.ex[e.id] = S.logs.ex[e.id] || []).push(rec);
     done();
   });
@@ -1789,6 +1841,274 @@ function askWishExpense(it) {
   }, { vals: vals, save: '기록', cancel: '건너뛰기', focus: false });
 }
 
+/* ---- 다른 기기와 연결 (GitHub) ---- */
+function sheetSync() {
+  const body = '<p class="cmsg">폰·태블릿·컴퓨터를 같은 GitHub 계정과 비밀번호로 연결하면 기록이 자동으로 이어져요. 기록은 비밀번호로 암호화해서 비공개 Gist에 올라가요.</p>' +
+    '<p class="fhint"><a class="lnk" href="https://github.com/settings/tokens/new?scopes=gist&description=Growth%20sync" target="_blank" rel="noopener noreferrer">GitHub 토큰 만들기</a> — 열리는 화면에서 gist 권한만 체크된 채로 만들고, 만료 기간은 길게 정하세요.</p>' +
+    field('GitHub 토큰', 'f-token', 'password', '', 'autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ghp_…"') +
+    field('동기화 비밀번호', 'f-pass', 'password', '', 'autocomplete="new-password" placeholder="6자 이상"') +
+    field('비밀번호 다시 입력', 'f-pass2', 'password', '', 'autocomplete="new-password"') +
+    '<p class="fhint">토큰과 비밀번호는 이 기기에만 저장돼요. 다른 기기에서도 같은 비밀번호를 입력해야 하고, 잃어버리면 클라우드 기록은 복구할 수 없어요.</p>' + ERR;
+  openSheet('다른 기기와 연결', body, async () => {
+    const mine = SHEET;
+    if (mine.busy) return;
+    const token = val('f-token').trim(), pass = val('f-pass'), pass2 = val('f-pass2');
+    if (!token) return setErr('GitHub 토큰을 입력해 주세요.');
+    if (pass.length < 6) return setErr('비밀번호는 6자 이상이어야 해요.');
+    if (pass !== pass2) return setErr('비밀번호가 서로 달라요.');
+    mine.busy = true; setErr('연결하는 중이에요…');
+    const r = await connectGist(token, pass);
+    if (SHEET !== mine) return;
+    mine.busy = false;
+    if (r.ok) { closeSheet(); toast('연결했어요'); render(); }
+    else setErr(r.code === 'pass' ? '이미 연결된 기록의 비밀번호와 달라요. 다른 기기에서 정한 비밀번호를 입력해 주세요.' : r.msg);
+  }, { save: '연결' });
+}
+
+/* ================= 기기 간 동기화 =================
+   · Claude 안에서 열면: 내 Claude 계정(db)에 자동 저장하고 다른 기기의 변경을 바로 반영해요.
+   · 그 밖(GitHub Pages 등)에서 열면: 내 GitHub 비공개 Gist에 비밀번호로 암호화해서 저장해요.
+     (토큰과 비밀번호는 이 기기에만 저장돼요. 기록 파일에는 들어가지 않아요.)
+   두 곳에서 동시에 고쳤다면 기록은 합치고, 설정은 더 최근 쪽을 따라요. */
+const SYNC_KEY = 'selfapp.sync';
+const SM0 = () => ({ provider: '', token: '', pass: '', gistId: '', salt: '', lastRemoteAt: 0, syncedLocalAt: 0, lastSyncAt: 0 });
+let SM = SM0();
+let PROV = null, SUI = { state: 'off', msg: '' }, syncBusy = false, syncAgain = false, syncTimer = null, trigOn = false;
+function loadSM() { try { const raw = localStorage.getItem(SYNC_KEY); if (raw) SM = Object.assign(SM0(), JSON.parse(raw)); } catch (e) { /* 새로 시작 */ } }
+function saveSM() { try { localStorage.setItem(SYNC_KEY, JSON.stringify(SM)); } catch (e) { /* ignore */ } }
+const inClaude = () => typeof window !== 'undefined' && !!window.claude && typeof window.claude.use === 'function';
+function serr(code, msg) { const e = new Error(msg); e.code = code; return e; }
+
+/* ---- 암호화 (Web Crypto: PBKDF2 → AES-GCM) ---- */
+function b64enc(buf) { const b = new Uint8Array(buf); let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); }
+function b64dec(str) { const s = atob(str), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; }
+const KEYS = {};
+const cryptoOK = () => typeof crypto !== 'undefined' && !!crypto.subtle && typeof TextEncoder !== 'undefined';
+async function getKey(pass, saltB64) {
+  const id = saltB64 + '|' + pass;
+  if (KEYS[id]) return KEYS[id];
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  KEYS[id] = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64dec(saltB64), iterations: 200000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  return KEYS[id];
+}
+async function encryptText(text, pass, saltB64) {
+  const key = await getKey(pass, saltB64), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(text));
+  return { iv: b64enc(iv), data: b64enc(ct) };
+}
+async function decryptText(env, pass) {
+  const key = await getKey(pass, env.salt);
+  try { return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64dec(env.iv) }, key, b64dec(env.data))); }
+  catch (e) { throw serr('pass', '비밀번호가 달라서 열 수 없어요.'); }
+}
+
+/* ---- GitHub Gist ---- */
+const GIST_FILE = 'growth-data.json';
+async function ghFetch(path, opt) {
+  opt = opt || {};
+  const headers = { Authorization: 'Bearer ' + SM.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+  if (opt.body) headers['Content-Type'] = 'application/json';
+  let r;
+  try { r = await fetch('https://api.github.com' + path, { method: opt.method || 'GET', headers: headers, body: opt.body }); }
+  catch (e) { throw serr('net', '인터넷에 연결할 수 없어요.'); }
+  if (r.status === 401) throw serr('auth', 'GitHub 토큰이 올바르지 않거나 만료됐어요.');
+  if (r.status === 404 && opt.allow404) return null;
+  if (r.status === 403 || r.status === 429) throw serr('limit', 'GitHub가 요청을 막았어요. 토큰에 gist 권한이 있는지 확인하고, 잠시 뒤 다시 시도해 주세요.');
+  if (!r.ok) throw serr('http', 'GitHub 응답에 문제가 있어요 (' + r.status + ').');
+  return r.json();
+}
+async function gistFind() {
+  for (let p = 1; p <= 5; p++) {
+    const list = await ghFetch('/gists?per_page=100&page=' + p);
+    if (!list || !list.length) break;
+    const hit = list.find(g => g.files && g.files[GIST_FILE]);
+    if (hit) return hit.id;
+    if (list.length < 100) break;
+  }
+  return '';
+}
+const gistProv = {
+  name: 'gist',
+  async fetch() {
+    if (!SM.gistId) SM.gistId = await gistFind();
+    if (!SM.gistId) return null;
+    const g = await ghFetch('/gists/' + SM.gistId, { allow404: true });
+    if (!g) { SM.gistId = ''; saveSM(); return null; }
+    const f = g.files && g.files[GIST_FILE];
+    if (!f) return null;
+    let text = f.content;
+    if (f.truncated && f.raw_url) text = await (await fetch(f.raw_url)).text();
+    const env = JSON.parse(text), state = JSON.parse(await decryptText(env, SM.pass));
+    SM.salt = env.salt;
+    return { updatedAt: env.updatedAt, state: state };
+  },
+  async push(state) {
+    const salt = SM.salt || b64enc(crypto.getRandomValues(new Uint8Array(16)));
+    const enc = await encryptText(JSON.stringify(state), SM.pass, salt);
+    const files = {}; files[GIST_FILE] = { content: JSON.stringify({ v: 1, alg: 'PBKDF2-SHA256/AES-GCM', salt: salt, iv: enc.iv, data: enc.data, updatedAt: state.updatedAt }) };
+    let done = false;
+    if (SM.gistId) { const r = await ghFetch('/gists/' + SM.gistId, { method: 'PATCH', body: JSON.stringify({ files: files }), allow404: true }); done = !!r; }
+    if (!done) { const g = await ghFetch('/gists', { method: 'POST', body: JSON.stringify({ description: 'Growth 앱 동기화 (암호화됨)', public: false, files: files }) }); SM.gistId = g.id; }
+    SM.salt = salt; saveSM();
+  }
+};
+
+/* ---- Claude 계정 (db) ---- */
+function chunkString(text, size) {
+  const out = []; let i = 0;
+  while (i < text.length) {
+    let j = Math.min(text.length, i + size);
+    if (j < text.length) { const c = text.charCodeAt(j); if (c >= 0xDC00 && c <= 0xDFFF) j++; }   // 이모지 같은 글자를 반으로 자르지 않아요
+    out.push(text.slice(i, j)); i = j;
+  }
+  return out.length ? out : [''];
+}
+async function makeDbProvider() {
+  const db = await window.claude.use('db'), user = await window.claude.use('user');
+  if (!db || !user) return null;
+  const id = await user.id();
+  if (!id) return null;
+  const meta = db.doc('data/users/' + id + '/app'), chunk = i => db.doc('data/users/' + id + '/app-' + i);
+  return {
+    name: 'db',
+    async fetch() {
+      const snap = await meta.get();
+      if (!snap.exists) return null;
+      const m = snap.data();
+      if (typeof m.state === 'string') return { updatedAt: m.updatedAt, state: JSON.parse(m.state) };   // 예전 저장 방식
+      const parts = await Promise.all(Array.from({ length: m.n }, (_, i) => chunk(i).get()));
+      return { updatedAt: m.updatedAt, state: JSON.parse(parts.map(p => p.data().s).join('')) };
+    },
+    async push(state) {
+      const parts = chunkString(JSON.stringify(state), 60000);
+      let prevN = 0;
+      try { const ps = await meta.get(); if (ps.exists && ps.data().n) prevN = ps.data().n; } catch (e) { /* 처음이에요 */ }
+      for (let i = 0; i < parts.length; i++) await chunk(i).set({ s: parts[i] });
+      await meta.set({ v: 2, n: parts.length, updatedAt: state.updatedAt });
+      for (let i = parts.length; i < prevN; i++) { try { await chunk(i).delete(); } catch (e) { /* ignore */ } }
+    },
+    subscribe(cb) { return meta.onSnapshot(s => { if (s.exists) cb(s.data().updatedAt); }, () => { /* 연결이 끊기면 다음 동기화 때 다시 시도해요 */ }); }
+  };
+}
+
+/* ---- 합치기: 기록은 양쪽 모두, 설정은 더 최근 쪽 ---- */
+function unionById(into, from) {
+  const have = new Set(into.map(x => x.id));
+  (from || []).forEach(x => { if (!have.has(x.id)) into.push(JSON.parse(JSON.stringify(x))); });
+}
+function mergeStates(a, b) {
+  const newer = a.updatedAt >= b.updatedAt ? a : b, older = newer === a ? b : a;
+  const out = normalize(JSON.parse(JSON.stringify(newer))), O = normalize(JSON.parse(JSON.stringify(older)));
+  ['exercises', 'cats', 'faith', 'topics', 'fixed'].forEach(k => unionById(out.settings[k], O.settings[k]));
+  out.settings.fixed.forEach(f => { const o = O.settings.fixed.find(x => x.id === f.id); if (o) f.applied = Object.assign({}, o.applied, f.applied); });
+  Object.keys(O.logs.ex).forEach(id => { out.logs.ex[id] = out.logs.ex[id] || []; unionById(out.logs.ex[id], O.logs.ex[id]); });
+  ['exp', 'inc', 'notes'].forEach(k => unionById(out.logs[k], O.logs[k]));
+  ['sleep', 'nospend'].forEach(k => Object.keys(O.logs[k]).forEach(d => { if (!(d in out.logs[k])) out.logs[k][d] = O.logs[k][d]; }));
+  Object.keys(O.logs.faith).forEach(d => {
+    const n = out.logs.faith[d], o = O.logs.faith[d];
+    out.logs.faith[d] = n ? Object.assign({}, o, n, { done: Object.assign({}, o.done, n.done) }) : o;
+  });
+  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish);
+  out.theme = a.theme;
+  out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
+  return out;
+}
+const hasLocalData = () => hasAnyData() || S.bucket.length > 0 || S.wish.length > 0 || S.settings.topics.length > 0 || S.settings.fixed.length > 0;
+
+/* ---- 동기화 본체 ---- */
+function setSyncUI(state, msg) {
+  const changed = SUI.state !== state || SUI.msg !== (msg || '');
+  SUI = { state: state, msg: msg || '' };
+  if (changed && typeof NAV !== 'undefined' && NAV.route === 'settings' && typeof byId === 'function' && byId('view')) render();
+}
+function queueSync(delay) {
+  if (!PROV) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow('change'), delay == null ? 1500 : delay);
+}
+async function pushState() {
+  const snap = S.updatedAt;
+  await PROV.push(S);
+  SM.lastRemoteAt = snap; SM.syncedLocalAt = snap; saveSM();
+}
+function adoptRemote(remote) {
+  const theme = S.theme;
+  S = normalize(remote.state); S.theme = theme; S.updatedAt = remote.updatedAt;
+  VER++; saveLocal();
+  SM.lastRemoteAt = remote.updatedAt; SM.syncedLocalAt = remote.updatedAt; saveSM();
+  if (typeof applyTheme === 'function') applyTheme();
+}
+async function syncCore() {
+  const remote = await PROV.fetch();
+  const dirty = S.updatedAt !== SM.syncedLocalAt;
+  let changedLocal = false;
+  if (!remote) {
+    if (hasLocalData()) await pushState(); else { SM.syncedLocalAt = S.updatedAt; saveSM(); }
+  } else {
+    const changed = remote.updatedAt !== SM.lastRemoteAt;
+    if (!changed && dirty) await pushState();
+    else if (changed && !dirty) { adoptRemote(remote); changedLocal = true; }
+    else if (changed && dirty) {
+      const merged = mergeStates(S, normalize(remote.state));
+      S = merged; VER++; saveLocal(); changedLocal = true;
+      await pushState();
+    }
+  }
+  SM.lastSyncAt = Date.now(); saveSM();
+  if (changedLocal && typeof render === 'function' && typeof byId === 'function' && byId('view')) render();
+}
+async function syncNow() {
+  if (!PROV) return;
+  if (syncBusy) { syncAgain = true; return; }
+  syncBusy = true; setSyncUI('syncing');
+  try { await syncCore(); setSyncUI('ok'); }
+  catch (e) { setSyncUI('err', e && e.message ? e.message : '동기화하지 못했어요.'); }
+  finally { syncBusy = false; if (syncAgain) { syncAgain = false; queueSync(300); } }
+}
+function startSyncTriggers() {
+  if (trigOn || !PROV) return;
+  trigOn = true;
+  if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') queueSync(400); });
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('online', () => queueSync(400));
+  let live = false;
+  if (PROV.subscribe) { try { PROV.subscribe(at => { if (at !== SM.lastRemoteAt) queueSync(200); }); live = true; } catch (e) { live = false; } }
+  if (!live) setInterval(() => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') syncNow(); }, 60000);
+}
+async function initSync() {
+  loadSM();
+  if (inClaude()) {
+    try { const p = await makeDbProvider(); if (p) { PROV = p; SM.provider = 'db'; } } catch (e) { /* 로그인하지 않았어요 */ }
+  } else if (SM.provider === 'gist' && SM.token && SM.pass && cryptoOK()) PROV = gistProv;
+  if (!PROV) { setSyncUI('off'); return; }
+  startSyncTriggers();
+  await syncNow();
+}
+/* 설정 화면에서 GitHub 연결 */
+async function connectGist(token, pass) {
+  if (!cryptoOK()) return { ok: false, msg: '이 주소에서는 암호화를 쓸 수 없어요. https 주소(예: GitHub Pages)에서 열어 주세요.' };
+  if (syncBusy) return { ok: false, msg: '동기화 중이에요. 잠시 뒤 다시 시도해 주세요.' };
+  const prev = Object.assign({}, SM), prevProv = PROV;
+  SM = Object.assign(SM0(), { provider: 'gist', token: token.trim(), pass: pass, syncedLocalAt: -1 });
+  PROV = gistProv; syncBusy = true;
+  try { await syncCore(); saveSM(); syncBusy = false; setSyncUI('ok'); startSyncTriggers(); return { ok: true }; }
+  catch (e) { SM = prev; PROV = prevProv; saveSM(); syncBusy = false; return { ok: false, msg: e && e.message ? e.message : '연결하지 못했어요.', code: e && e.code }; }
+}
+function disconnectSync() { SM = SM0(); PROV = null; saveSM(); setSyncUI('off'); }
+function agoText(ts) {
+  if (!ts) return '';
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  return s < 60 ? '방금' : s < 3600 ? Math.floor(s / 60) + '분 전' : s < 86400 ? Math.floor(s / 3600) + '시간 전' : md(ymd(new Date(ts)));
+}
+function syncStatusText() {
+  if (SUI.state === 'syncing') return '동기화 중…';
+  if (SUI.state === 'err') return '동기화 문제: ' + SUI.msg + ' 이 기기에는 저장돼요.';
+  const when = SM.lastSyncAt ? ' · 마지막 동기화 ' + agoText(SM.lastSyncAt) : '';
+  if (PROV && PROV.name === 'db') return '내 Claude 계정과 자동으로 동기화돼요' + when;
+  if (PROV && PROV.name === 'gist') return 'GitHub에 암호화해서 동기화돼요' + when;
+  if (inClaude()) return '이 기기에만 저장돼요. Claude에 로그인한 상태로 열면 폰·태블릿·컴퓨터가 자동으로 이어져요.';
+  return '이 기기에만 저장돼요.';
+}
+
 /* ================= 동작 & 시작 ================= */
 const ACT = {
   go(arg, el) {
@@ -1806,6 +2126,7 @@ const ACT = {
     render(true);
   },
   toggleCat(arg) { NAV.open[arg] = !NAV.open[arg]; render(); },
+  toggleAll(arg) { NAV.open['all:' + arg] = !NAV.open['all:' + arg]; render(); },
   range(arg) { NAV.range = arg; render(); },
   gpick(arg) { NAV.arg = arg; render(); },
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
@@ -1878,24 +2199,29 @@ const ACT = {
     if (hasAnyData()) confirmSheet('예시 데이터 채우기', '지금까지의 기록이 예시 데이터로 바뀌어요. 예시용 ‘데이트’ 카테고리와 고정 지출이 추가될 수 있어요.', '바꾸기', run);
     else run();
   },
-  exportData() {
+  async exportData() {
+    const text = JSON.stringify(S, null, 2), name = '자기관리-백업-' + todayStr() + '.json';
     try {
-      const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      if (inClaude()) { const dl = await window.claude.use('downloads'); if (dl) { await dl.save({ filename: name, data: text }); return; } }
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
       const a = document.createElement('a');
-      a.href = url; a.download = '자기관리-백업-' + todayStr() + '.json';
+      a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
       toast('백업 파일을 저장했어요');
-    } catch (e) { toast('내보내기에 실패했어요'); }
+    } catch (e) { if (!e || e.code !== 'declined') toast('내보내기에 실패했어요'); }
   },
   importData() { const f = byId('importFile'); if (f) f.click(); },
+  syncSetup() { sheetSync(); },
+  syncNow() { syncNow().then(() => { if (SUI.state === 'ok') toast('동기화했어요'); }); },
+  syncOff() { confirmSheet('연결 해제', '이 기기에서만 연결이 해제돼요. 이 기기의 기록과 클라우드에 올라간 기록은 그대로 남아요.', '해제', () => { disconnectSync(); closeSheet(); toast('연결을 해제했어요'); render(); }); },
   resetAll() {
     confirmSheet('모든 데이터 지우기', '기록과 설정이 모두 초기화돼요. 되돌릴 수 없어요.', '지우기', () => {
       const theme = S.theme;
       S = defaultState(); S.theme = theme; commit(); closeSheet(); toast('초기화했어요'); render();
     });
   },
+  layoutPref(arg) { LAYOUT_PREF = arg; try { localStorage.setItem(LAYOUT_KEY, arg); } catch (e) { /* ignore */ } render(); },
   theme(arg) { S.theme = arg; applyTheme(); commit(); render(); },
   tgShow(arg) { S.settings.show[arg] = !S.settings.show[arg]; commit(); render(); },
   tgRate() { S.settings.rate = !S.settings.rate; commit(); render(); },
@@ -1951,7 +2277,19 @@ const ACT = {
     if (SHEET.onPick) SHEET.onPick(grp);
   }
 };
+const INP = {
+  runPrev(arg, el) { const c = el.id === 'f-val' ? decimal(el.value) : digits(el.value); if (c !== el.value) el.value = c; updateRunPreview(); },
+  num(arg, el) { const c = decimal(el.value); if (c !== el.value) el.value = c; }
+};
 const CHG = {
+  runNorm() {
+    if (!SHEET) return;
+    const ids = SHEET.vals.shown === 'pace' ? ['f-pmin', 'f-psec'] : ['f-min', 'f-sec'], a = byId(ids[0]), b = byId(ids[1]);
+    if (!a || !b) return;
+    const mi = parseInt(digits(a.value), 10) || 0, se = parseInt(digits(b.value), 10) || 0;
+    if (se >= 60) { const tot = mi * 60 + se; a.value = String(Math.floor(tot / 60)); b.value = String(tot % 60); }
+    updateRunPreview();
+  },
   renEx(arg, v) { const e = S.settings.exercises.find(x => x.id === arg); if (e && v.trim()) e.name = v.trim(); commit(); render(); },
   renCat(arg, v) { const c = S.settings.cats.find(x => x.id === arg); if (c && v.trim()) c.name = v.trim(); commit(); render(); },
   renSub(arg, v) { const p = arg.split('|'), c = S.settings.cats.find(x => x.id === p[0]); const s = c && c.subs.find(x => x.id === p[1]); if (s && v.trim()) s.name = v.trim(); commit(); render(); },
@@ -1963,15 +2301,37 @@ function applyTheme() {
   const r = document.documentElement;
   if (S.theme === 'dark' || S.theme === 'light') r.setAttribute('data-theme', S.theme); else r.removeAttribute('data-theme');
 }
-let LAST = null;
-/* 폰은 한 줄 화면, 태블릿 가로(넓고 높은 화면)는 사이드 메뉴 + 2단 화면이에요 */
-const TABLET_Q = '(min-width: 900px) and (min-height: 540px)';
-function isTablet() { return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(TABLET_Q).matches; }
+let LAST = null, LAYOUT = 'phone';
+/* 화면 배치: phone(한 줄 + 아래 탭) / wide(사이드 메뉴 + 넓은 한 줄) / two(사이드 메뉴 + 2단)
+   창의 실제 크기로 정해요. 태블릿에서 자동 판단이 안 맞으면 설정에서 직접 고를 수 있어요(이 기기에만 저장). */
+const LAYOUT_KEY = 'selfapp.layout';
+let LAYOUT_PREF = 'auto';
+function loadLayoutPref() { try { const v = localStorage.getItem(LAYOUT_KEY); if (v === 'phone' || v === 'tablet' || v === 'auto') LAYOUT_PREF = v; } catch (e) { /* 기본값 사용 */ } }
+function viewportSize() {
+  const r = typeof document !== 'undefined' && document.documentElement ? document.documentElement : {};
+  const w = (typeof window !== 'undefined' && window.innerWidth) || r.clientWidth || 0;
+  const h = (typeof window !== 'undefined' && window.innerHeight) || r.clientHeight || 0;
+  return { w: w, h: h };
+}
+function layoutMode() {
+  const v = viewportSize();
+  if (LAYOUT_PREF === 'phone') return 'phone';
+  if (LAYOUT_PREF === 'tablet') return v.w >= 960 ? 'two' : 'wide';
+  if (v.w < 800 || v.h < 440 || v.w < v.h) return 'phone';   // 세로로 든 화면은 예전처럼 한 줄
+  return v.w >= 960 ? 'two' : 'wide';
+}
+function applyLayout() {
+  const m = layoutMode(), r = document.documentElement;
+  r.setAttribute('data-layout', m);
+  if (m === 'phone') r.removeAttribute('data-side'); else r.setAttribute('data-side', '');
+  return m;
+}
+const LAYOUT_NAME = { phone: '폰 (한 줄)', wide: '태블릿 (넓은 한 줄)', two: '태블릿 (2단)' };
 function layout(html) {
   const clean = html.replace(/<!--(cols|col)-->/g, '');
-  if (!isTablet()) return clean;
+  if (LAYOUT === 'phone') return clean;
   const k = html.indexOf('<!--cols-->');
-  if (k < 0) return '<div class="onecol">' + clean + '</div>';
+  if (LAYOUT === 'wide' || k < 0) return '<div class="onecol">' + clean + '</div>';
   const head = html.slice(0, k), parts = html.slice(k + 11).split('<!--col-->');
   return head.replace(/<!--col-->/g, '') + '<div class="twocol"><div class="col">' + parts[0] + '</div><div class="col">' + parts.slice(1).join('') + '</div></div>';
 }
@@ -1993,6 +2353,7 @@ function renderSide() {
   return h + '<div class="sgrow"></div>' + item('settings', '설정', 'gear');
 }
 function render(top) {
+  LAYOUT = applyLayout();
   const fixedChanged = applyFixed(), got = applyBucketLinks();
   if (fixedChanged || got.length) commit();
   if (got.length) toast('버킷리스트를 이뤘어요: ' + got[0]);
@@ -2028,6 +2389,12 @@ function init() {
     if (el.tagName === 'A') e.preventDefault();
     fn(el.getAttribute('data-arg') || '', el, e);
   });
+  document.addEventListener('input', e => {
+    const el = e.target && e.target.closest ? e.target.closest('[data-inp]') : null;
+    if (!el) return;
+    const fn = INP[el.getAttribute('data-inp')];
+    if (fn) fn(el.getAttribute('data-arg') || '', el);
+  });
   document.addEventListener('change', e => {
     const el = e.target.closest('[data-chg]');
     if (!el) return;
@@ -2044,7 +2411,8 @@ function init() {
         const o = JSON.parse(String(rd.result));
         if (!o || typeof o !== 'object' || !o.settings || !o.logs) throw new Error('bad');
         confirmSheet('데이터 가져오기', '현재 기록과 설정이 가져온 파일의 내용으로 바뀌어요.', '가져오기', () => {
-          S = normalize(o); commit(); applyTheme(); closeSheet(); toast('가져왔어요'); render(true);
+          const theme = S.theme;
+          S = normalize(o); S.theme = theme; commit(); applyTheme(); closeSheet(); toast('가져왔어요'); render(true);
         });
       } catch (e) { toast('올바른 백업 파일이 아니에요'); }
       imp.value = '';
@@ -2052,12 +2420,16 @@ function init() {
     rd.readAsText(file);
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && SHEET) closeSheet(); });
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    const mq = window.matchMedia(TABLET_Q), again = () => render();
-    if (mq.addEventListener) mq.addEventListener('change', again); else if (mq.addListener) mq.addListener(again);
+  loadLayoutPref();
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    let rt = null;
+    const again = () => { clearTimeout(rt); rt = setTimeout(() => { if (layoutMode() !== LAYOUT) render(); }, 150); };
+    window.addEventListener('resize', again);
+    window.addEventListener('orientationchange', again);
   }
   render(true);
-  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  initSync();
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector && document.querySelector('link[rel="manifest"]')) navigator.serviceWorker.register('./sw.js').catch(() => { /* 오프라인 캐시 없이 사용 */ });
 }
 if (typeof document !== 'undefined' && document.getElementById('view')) init();
 

@@ -6,7 +6,7 @@
 html{scroll-padding-top:env(safe-area-inset-top,0px);color-scheme:light dark}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html.noscroll{overflow:hidden}
-body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.35}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Noto Sans KR',system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.35}
 button{font:inherit;color:inherit;cursor:pointer}
 a{color:inherit;text-decoration:none}
 input{font:inherit}
@@ -407,32 +407,35 @@ hr{border:0;border-top:1px solid var(--line);margin:14px 0 12px}
 .lprog{display:block;height:6px;border-radius:3px;background:var(--track2);margin-top:6px;width:100%}
 .lprog span{display:block;height:6px;border-radius:3px;background:var(--c)}
 
-/* ===== 화면 크기별 배치 ===== */
+/* ===== 화면 크기별 배치 (data-layout / data-side 는 app.js 가 창 크기로 정해요) ===== */
 #side{display:none}
 .back{margin-right:auto}
 .hrow .lnk{margin-left:auto}
 @media (min-width:600px){ #app{max-width:560px} }
-@media (min-width:900px) and (min-height:540px){
-  #side{display:flex;flex-direction:column;gap:2px;position:fixed;left:0;top:0;bottom:0;width:232px;padding:calc(20px + env(safe-area-inset-top,0px)) 12px calc(16px + env(safe-area-inset-bottom,0px));background:var(--card);border-right:1px solid var(--tabline);overflow-y:auto;z-index:20}
-  #side .sbrand{font-size:22px;font-weight:700;letter-spacing:-.3px;padding:4px 12px 14px}
-  #side .slab{font-size:12px;font-weight:600;color:var(--sub);padding:16px 12px 6px}
-  #side a{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:10px;font-size:16px;font-weight:500;color:var(--text)}
-  #side a svg{color:var(--sub);flex-shrink:0}
-  #side a.on{background:var(--track2);color:var(--link);font-weight:600}
-  #side a.on svg{color:var(--link)}
-  #side .sgrow{flex:1;min-height:12px}
-  #tabs{display:none}
-  #app{max-width:none;margin:0 0 0 232px;padding:28px 36px 56px}
-  #view{display:block;max-width:1060px;margin:0 auto}
-  #view > *{margin:0 0 18px}
-  #view > .seg.rangeseg,#view > .wknav{max-width:420px}
-  .twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start}
-  .col{display:flex;flex-direction:column;gap:18px;min-width:0}
-  .onecol{display:flex;flex-direction:column;gap:18px;max-width:720px}
-  .back.back-root{display:none}
-  .chart{max-height:260px}
-  .bar{width:min(36px,70%)}
-  .hdr h1{font-size:38px}
-  .sheet{top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:84vh;border-radius:20px;padding-bottom:16px}
-  #toast{bottom:32px}
-}
+html[data-side] #side{display:flex;flex-direction:column;gap:2px;position:fixed;left:0;top:0;bottom:0;width:216px;padding:calc(20px + env(safe-area-inset-top,0px)) 12px calc(16px + env(safe-area-inset-bottom,0px));background:var(--card);border-right:1px solid var(--tabline);overflow-y:auto;z-index:20}
+html[data-side] #side .sbrand{font-size:22px;font-weight:700;letter-spacing:-.3px;padding:4px 12px 14px}
+html[data-side] #side .slab{font-size:12px;font-weight:600;color:var(--sub);padding:16px 12px 6px}
+html[data-side] #side a{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:10px;font-size:16px;font-weight:500;color:var(--text)}
+html[data-side] #side a svg{color:var(--sub);flex-shrink:0}
+html[data-side] #side a.on{background:var(--track2);color:var(--link);font-weight:600}
+html[data-side] #side a.on svg{color:var(--link)}
+html[data-side] #side .sgrow{flex:1;min-height:12px}
+html[data-side] #tabs{display:none}
+html[data-side] #app{max-width:none;margin:0 0 0 216px;padding:28px 32px 56px}
+html[data-side] #view{display:block;max-width:1060px;margin:0 auto}
+html[data-side] #view > *{margin:0 0 18px}
+html[data-side] #view > .seg.rangeseg,html[data-side] #view > .wknav{max-width:420px}
+html[data-side] .twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start}
+html[data-side] .col{display:flex;flex-direction:column;gap:18px;min-width:0}
+html[data-side] .onecol{display:flex;flex-direction:column;gap:18px;max-width:720px}
+html[data-side] .back.back-root{display:none}
+html[data-side] .chart{max-height:260px}
+html[data-side] .bar{width:min(36px,70%)}
+html[data-side] .hdr h1{font-size:38px}
+html[data-side] .sheet{top:50%;bottom:auto;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:84vh;border-radius:20px;padding-bottom:16px}
+html[data-side] #toast{bottom:32px}
+
+/* 러닝 입력 */
+.fld input.tin{min-height:56px;font-size:22px;font-weight:600;letter-spacing:.5px}
+.runprev{min-height:44px;display:flex;align-items:center;padding:0 14px;border-radius:12px;background:var(--cbg,var(--inputbg));color:var(--ct,var(--text));font-size:15px;font-weight:600}
+.eic{display:flex;color:var(--sub2);margin-left:4px;flex-shrink:0}

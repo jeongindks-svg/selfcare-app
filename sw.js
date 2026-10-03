@@ -1,6 +1,6 @@
 // 오프라인에서도 열리도록 앱 파일을 캐시해요.
 // 앱 파일을 수정해서 올렸다면 아래 버전 숫자를 올려 주세요.
-const CACHE = 'selfcare-v6';
+const CACHE = 'selfcare-v7';
 const FILES = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
