@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 10;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 11;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -119,7 +119,7 @@ function commit() { S.updatedAt = Date.now(); VER++; saveLocal(); queueSync(); }
 let IX = { ver: -1 };
 function ix() {
   if (IX.ver === VER) return IX;
-  const o = { ver: VER, ex: {}, spend: {}, spendCat: {}, inc: {}, first: null };
+  const o = { ver: VER, ex: {}, corp: {}, spend: {}, spendCat: {}, inc: {}, first: null };
   const upd = d => { if (!o.first || d < o.first) o.first = d; };
   Object.keys(S.logs.ex).forEach(id => {
     const m = {};
@@ -128,6 +128,7 @@ function ix() {
   });
   Object.keys(S.logs.sleep).forEach(upd);
   S.logs.exp.forEach(r => {
+    if (r.corp) { o.corp[r.d] = (o.corp[r.d] || 0) + r.amt; upd(r.d); return; }   // 회사카드는 내 지출에 넣지 않아요
     o.spend[r.d] = (o.spend[r.d] || 0) + r.amt;
     const c = o.spendCat[r.cat] = o.spendCat[r.cat] || {};
     c[r.d] = (c[r.d] || 0) + r.amt;
@@ -143,6 +144,7 @@ function ix() {
 const hasAnyData = () => !!ix().first;
 const exSum = (id, d) => (ix().ex[id] && ix().ex[id][d]) || 0;
 const spendOn = d => ix().spend[d] || 0;
+const corpOn = d => ix().corp[d] || 0;
 const sleepOn = d => S.logs.sleep[d] || null;
 const faithRec = d => S.logs.faith[d] || {};
 function faithDone(d, it) {
@@ -479,8 +481,8 @@ function moneyStats() {
     pbWeek: maxOf(Object.keys(wk).map(k => wk[k]))
   };
 }
-function catSpentMonth(cid, ym) { const p = ym || monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && x.d.slice(0, 7) === p).map(x => x.amt)); }
-function subSpentMonth(cid, sid) { const p = monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && (x.sub || '') === sid && x.d.slice(0, 7) === p).map(x => x.amt)); }
+function catSpentMonth(cid, ym) { const p = ym || monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && !x.corp && x.d.slice(0, 7) === p).map(x => x.amt)); }
+function subSpentMonth(cid, sid) { const p = monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && (x.sub || '') === sid && !x.corp && x.d.slice(0, 7) === p).map(x => x.amt)); }
 
 /* 월별 예산: 따로 정한 달은 그 값을, 아니면 기본 예산을 써요 */
 const budgetOf = ym => S.settings.monthBudgets[ym] || null;
@@ -495,14 +497,14 @@ function monthShift(ym, n) { const p = ym.split('-').map(Number), d = new Date(p
 const ymLabel = ym => ym.slice(0, 4) + '년 ' + (+ym.slice(5)) + '월';
 /* 한 달 수입·지출 집계 */
 function monthData(ym) {
-  const exp = S.logs.exp.filter(x => x.d.slice(0, 7) === ym), inc = S.logs.inc.filter(x => x.d.slice(0, 7) === ym);
+  const all = S.logs.exp.filter(x => x.d.slice(0, 7) === ym), exp = all.filter(x => !x.corp), corp = all.filter(x => x.corp), inc = S.logs.inc.filter(x => x.d.slice(0, 7) === ym);
   const spent = sum(exp.map(x => x.amt)), income = sum(inc.map(x => x.amt));
   const known = {}; S.settings.cats.forEach(c => { known[c.id] = c; });
   const byCat = {}; exp.forEach(x => { const k = known[x.cat] ? x.cat : '__etc'; byCat[k] = (byCat[k] || 0) + x.amt; });
   const byDay = {}; exp.forEach(x => { byDay[x.d] = (byDay[x.d] || 0) + x.amt; });
   const p = ym.split('-').map(Number), dim = new Date(p[0], p[1], 0).getDate(), t = todayStr();
   const elapsed = ym === t.slice(0, 7) ? +t.slice(8) : (ym < t.slice(0, 7) ? dim : 0);
-  return { ym: ym, exp: exp, inc: inc, spent: spent, income: income, byCat: byCat, byDay: byDay, dim: dim, elapsed: elapsed, count: exp.length };
+  return { ym: ym, exp: exp, corp: corp, corpSum: sum(corp.map(x => x.amt)), inc: inc, spent: spent, income: income, byCat: byCat, byDay: byDay, dim: dim, elapsed: elapsed, count: exp.length };
 }
 
 /* 신앙 */
@@ -1132,7 +1134,7 @@ function dayMarks(d) {
   const st = S.settings, m = [];
   if (st.show.exercise && st.exercises.some(e => exSum(e.id, d) > 0)) m.push('run');
   if (st.show.sleep && sleepOn(d)) m.push('sleep');
-  if (st.show.money && (spendOn(d) > 0 || (ix().inc[d] || 0) > 0)) m.push('money');
+  if (st.show.money && (spendOn(d) > 0 || corpOn(d) > 0 || (ix().inc[d] || 0) > 0)) m.push('money');
   if (st.show.faith && (faithCount(d) > 0 || S.logs.notes.some(n => n.d === d))) m.push('faith');
   return m;
 }
@@ -1143,7 +1145,7 @@ function calDetail(d) {
   const sl = st.show.sleep ? sleepOn(d) : null;
   if (sl) rows.push('<button type="button" class="erow" data-act="logSleep" data-arg="' + d + '"><span class="el"><span class="e1">수면</span><span class="e2">' + esc(sl.bed) + ' → ' + esc(sl.wake) + '</span></span><span class="er">' + fmtDur(sl.dur) + (sl.score ? ' · ' + sl.score + '점' : '') + '</span>' + EDIT_IC + '</button>');
   if (st.show.money) {
-    S.logs.exp.filter(x => x.d === d).forEach(x => { const sn = x.sub ? subName(x.cat, x.sub) : ''; rows.push(entryRow('exp|' + x.id, esc(x.memo || sn || catName(x.cat)), esc(catName(x.cat)) + (sn ? ' · ' + esc(sn) : ''), '−' + won(x.amt))); });
+    S.logs.exp.filter(x => x.d === d).forEach(x => rows.push(expRow(x)));
     S.logs.inc.filter(x => x.d === d).forEach(x => rows.push(entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc')));
   }
   if (st.show.faith) {
@@ -1199,6 +1201,7 @@ function viewMStat() {
     ['지출 건수', D.count + '건'],
     ['가장 많이 쓴 날', topDay ? md(topDay) + ' · ' + won(D.byDay[topDay]) : dash],
     ['가장 큰 지출', biggest ? esc(biggest.memo || catName(biggest.cat)) + ' · ' + won(biggest.amt) : dash],
+    ['회사카드 사용 (별도)', D.corpSum > 0 ? won(D.corpSum) + ' · ' + D.corp.length + '건' : dash],
     ['고정 지출', fixedSum > 0 ? won(fixedSum) + ' (' + Math.round(fixedSum / D.spent * 100) + '%)' : dash],
     ['지난달 대비 지출', vs == null ? dash : (vs > 0 ? '+' : vs < 0 ? '−' : '') + Math.abs(vs) + '%']
   ];
@@ -1407,6 +1410,11 @@ function viewSleep() {
 }
 
 /* ---------- 가계부 ---------- */
+function expRow(x) {
+  if (x.corp) return entryRow('exp|' + x.id, esc(x.memo || '회사카드'), '<span class="corptag">회사카드</span> 내 지출 아님', '−' + won(x.amt), 'corpamt');
+  const sn = x.sub ? subName(x.cat, x.sub) : '';
+  return entryRow('exp|' + x.id, esc(x.memo || sn || catName(x.cat)), esc(catName(x.cat)) + (sn ? ' · ' + esc(sn) : '') + (x.fixed ? ' · 고정' : ''), '−' + won(x.amt));
+}
 const catName = id => { const c = S.settings.cats.find(x => x.id === id); return c ? c.name : '기타'; };
 const subName = (cid, sid) => { const c = S.settings.cats.find(x => x.id === cid); const s = c && c.subs.find(x => x.id === sid); return s ? s.name : ''; };
 function viewMoney() {
@@ -1438,6 +1446,11 @@ function viewMoney() {
     }
     return r2 + '</div>';
   }).join('') : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section>';
+  const corpAll = S.logs.exp.filter(x => x.corp).sort(byDateDesc), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
+  h += '<section class="group c-money"><div class="gh">회사카드 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
+    '<div class="corpsum"><div><div class="gl1">' + ymNow() + ' 사용</div><div class="gl2">' + won(corpMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(corpAll.map(x => x.amt))) + '</div></div></div>' +
+    corpAll.slice(0, 5).map(x => entryRow('exp|' + x.id, esc(x.memo || '회사카드'), dateLabel(x.d), '−' + won(x.amt), 'corpamt')).join('') +
+    '<button type="button" class="addrow" data-act="logCorp">' + ico('plus', 18, 2) + '회사카드 사용 추가</button></section>';
   const fx = st.fixed, fxSum = sum(fx.map(f => f.amt));
   h += '<section class="group c-money"><div class="gh">고정 지출 <span class="hint">매달 정해진 날 자동으로 입력돼요' + (fx.length ? ' · 합계 ' + won(fxSum) : '') + '</span></div>' + fx.map(f =>
     '<button type="button" class="erow" data-act="editFixed" data-arg="' + f.id + '"><span class="el"><span class="e1">' + esc(f.name) + '</span><span class="e2">매월 ' + f.day + '일 · ' + esc(catName(f.cat)) + (f.sub ? ' · ' + esc(subName(f.cat, f.sub)) : '') + '</span></span><span class="er">' + won(f.amt) + '</span></button>').join('') +
@@ -1450,8 +1463,7 @@ function viewMoney() {
     if (x.d !== lastD) { lastD = x.d; const sp = spendOn(x.d); rows += '<div class="dgh"><span>' + dateLabel(x.d) + '</span><span>' + (sp > 0 ? '−' + won(sp) : '') + '</span></div>'; }
     if (x.t === 'inc') rows += entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc');
     else {
-      const sn = x.sub ? subName(x.cat, x.sub) : '';
-      rows += entryRow('exp|' + x.id, esc(x.memo || sn || catName(x.cat)), esc(catName(x.cat)) + (sn ? ' · ' + esc(sn) : '') + (x.fixed ? ' · 고정' : ''), '−' + won(x.amt));
+      rows += expRow(x);
     }
   });
   h += '<section class="group"><div class="gh">최근 내역 <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">아직 내역이 없어요.</div>') + '</section>';
@@ -1548,11 +1560,8 @@ function setMoney() {
   const tot = base ? st.monthly : budgetTotal(ym);
   h += '<section class="group">' + stepRow('월 예산', base ? '기본 전체 예산' : ymLabel(ym) + ' 전체 예산', won(tot), base ? 'stepSet' : 'stepBudget', base ? 'monthly|50000|100000|50000000' : 'total|50000') + '</section>';
   if (!base && own) h += '<div class="btnpair"><button type="button" class="btn ghost" data-act="bmBase">기본 예산으로 저장</button><button type="button" class="btn ghost danger" data-act="bmReset">이 달 설정 지우기</button></div><p class="fhint">‘기본 예산으로 저장’은 이 달 값을 따로 정하지 않은 모든 달에 쓰는 값으로 바꿔요.</p>';
-  h += glabel('카테고리');
-  h += st.cats.map(c => '<section class="group c-money"><div class="nmrow"><input class="nm" value="' + esc(c.name) + '" aria-label="카테고리 이름" data-chg="renCat" data-arg="' + c.id + '">' + trashBtn('delCat', c.id, c.name) + '</div>' +
-    (base ? stepRow('월 예산', '', won(c.monthly), 'stepCat', c.id + '|10000') : stepRow('월 예산', '', won(budgetCat(c, ym)), 'stepBudget', 'c:' + c.id + '|10000')) +
-    c.subs.map(s => '<div class="subrow"><input class="nm inl" value="' + esc(s.name) + '" aria-label="세부 항목 이름" data-chg="renSub" data-arg="' + c.id + '|' + s.id + '">' + trashBtn('delSub', c.id + '|' + s.id, s.name) + '</div>').join('') +
-    '<button type="button" class="addrow" data-act="addSub" data-arg="' + c.id + '">' + ico('plus', 18, 2) + '세부 항목 추가</button></section>').join('');
+  h += glabel('카테고리 · 눌러서 수정');
+  h += '<section class="group c-money">' + (st.cats.map(c => '<button type="button" class="erow" data-act="editCat" data-arg="' + c.id + '"><span class="el"><span class="e1">' + esc(c.name) + '</span>' + (c.subs.length ? '<span class="e2">' + esc(c.subs.map(x => x.name).join(' · ')) + '</span>' : '') + '</span><span class="er">' + won(base ? c.monthly : budgetCat(c, ym)) + '</span>' + EDIT_IC + '</button>').join('') || '<div class="emptyrow">카테고리가 없어요.</div>') + '</section>';
   h += dashAdd('addCat', '카테고리 추가');
   return h;
 }
@@ -1605,6 +1614,11 @@ const val = id => { const el = byId(id); return el ? el.value : ''; };
 function field(label, id, type, value, attrs) {
   return '<div class="fld"><label for="' + id + '">' + label + '</label><input id="' + id + '" type="' + type + '" value="' + esc(value) + '" ' + (attrs || '') + '></div>';
 }
+/* 금액 입력: 쓰는 동안 천 단위 쉼표를 찍어 줘요 */
+function mfield(label, id, value, attrs) {
+  return '<div class="fld"><label for="' + id + '">' + label + '</label><input id="' + id + '" type="text" inputmode="numeric" autocomplete="off" value="' + (value ? fmtN(value, 0) : '') + '" data-inp="money" ' + (attrs || '') + '></div>';
+}
+const readMoney = id => parseInt(String(val(id)).replace(/[^0-9]/g, ''), 10) || 0;
 function area(label, id, value, attrs) {
   return '<div class="fld"><label for="' + id + '">' + label + '</label><textarea id="' + id + '" rows="5" ' + (attrs || '') + '>' + esc(value) + '</textarea></div>';
 }
@@ -1745,28 +1759,34 @@ function subChips(cid, sel) {
   if (!c || !c.subs.length) return '';
   return '<label>세부 항목 (선택)</label>' + chipsHtml('sub', [{ v: '', l: '선택 안 함' }].concat(c.subs.map(x => ({ v: x.id, l: x.name }))), sel || '');
 }
-function sheetMoney(eid) {
+const lastExpDate = () => { const t = todayStr(), d = S.lastExpDate; return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= t ? d : t; };
+function sheetMoney(eid, corp) {
   const t = todayStr(), cats = S.settings.cats, cur = eid ? S.logs.exp.find(x => x.id === eid) : null;
   if (eid && !cur) return;
-  const vals = { cat: cur ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '' };
+  const isCorp = cur ? !!cur.corp : !!corp;
+  const vals = { cat: cur && cur.cat ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '', pay: isCorp ? 'corp' : 'mine' };
   const showNo = !cur && !spendOn(t) && !S.logs.nospend[t];
-  const body = field('금액 (원)', 'f-amt', 'number', cur ? cur.amt : '', 'inputmode="numeric" step="100" min="0" placeholder="0"') +
-    '<div class="fld"><label>카테고리</label>' + chipsHtml('cat', cats.map(c => ({ v: c.id, l: c.name })), vals.cat) + '</div>' +
-    '<div class="fld" id="subwrap">' + subChips(vals.cat, vals.sub) + '</div>' +
+  const d0 = cur ? cur.d : lastExpDate();
+  const body = mfield('금액 (원)', 'f-amt', cur ? cur.amt : '', 'placeholder="0"') +
+    '<div class="fld"><label>누구 돈이에요?</label>' + chipsHtml('pay', [{ v: 'mine', l: '내 지출' }, { v: 'corp', l: '회사카드' }], vals.pay) + '</div>' +
+    '<div id="catwrap" style="display:' + (isCorp ? 'none' : 'block') + '"><div class="fld"><label>카테고리</label>' + chipsHtml('cat', cats.map(c => ({ v: c.id, l: c.name })), vals.cat) + '</div>' +
+    '<div class="fld" id="subwrap">' + subChips(vals.cat, vals.sub) + '</div></div>' +
     field('메모 (선택)', 'f-memo', 'text', cur ? cur.memo : '', 'maxlength="40" placeholder="예: 점심"') +
-    field('날짜', 'f-date', 'date', cur ? cur.d : t, 'max="' + t + '"') +
+    field('날짜', 'f-date', 'date', d0, 'max="' + t + '"') + (!cur && d0 !== t ? '<p class="fhint">마지막으로 입력한 날짜(' + md(d0) + ')로 맞춰 뒀어요.</p>' : '') +
     (showNo ? '<button type="button" class="btn ghost" data-act="noSpend">오늘은 지출 없음</button>' : '') + (cur ? delBtn('exp|' + eid) : '') + ERR;
-  openSheet(cur ? '지출 수정' : '지출 추가', body, () => {
-    const d = val('f-date'), amt = Math.round(parseFloat(val('f-amt')));
+  openSheet(cur ? '지출 수정' : (isCorp ? '회사카드 사용 추가' : '지출 추가'), body, () => {
+    const d = val('f-date'), amt = readMoney('f-amt');
     if (!d || d > t) return setErr('날짜를 확인해 주세요.');
     if (!(amt > 0)) return setErr('금액을 입력해 주세요.');
-    const rec = cur || { id: uid() };
-    rec.d = d; rec.cat = SHEET.vals.cat; rec.amt = amt; rec.memo = val('f-memo').trim();
-    if (SHEET.vals.sub) rec.sub = SHEET.vals.sub; else delete rec.sub;
-    if (!cur) S.logs.exp.push(rec);
+    const rec = cur || { id: uid() }, c = SHEET.vals.pay === 'corp';
+    rec.d = d; rec.amt = amt; rec.memo = val('f-memo').trim();
+    if (c) { rec.corp = true; rec.cat = ''; delete rec.sub; }
+    else { delete rec.corp; rec.cat = SHEET.vals.cat; if (SHEET.vals.sub) rec.sub = SHEET.vals.sub; else delete rec.sub; }
+    if (!cur) { S.logs.exp.push(rec); S.lastExpDate = d; }
     done();
   }, { vals: vals, focus: !cur, onPick: grp => {
     if (grp === 'cat') { SHEET.vals.sub = ''; const w = byId('subwrap'); if (w) w.innerHTML = subChips(SHEET.vals.cat, ''); }
+    if (grp === 'pay') { const w = byId('catwrap'); if (w) w.style.display = SHEET.vals.pay === 'corp' ? 'none' : 'block'; }
   } });
 }
 
@@ -1774,11 +1794,11 @@ function sheetMoney(eid) {
 function sheetIncome(eid) {
   const t = todayStr(), cur = eid ? S.logs.inc.find(x => x.id === eid) : null;
   if (eid && !cur) return;
-  const body = field('금액 (원)', 'f-amt', 'number', cur ? cur.amt : '', 'inputmode="numeric" step="1000" min="0" placeholder="0"') +
+  const body = mfield('금액 (원)', 'f-amt', cur ? cur.amt : '', 'placeholder="0"') +
     field('메모 (선택)', 'f-memo', 'text', cur ? cur.memo : '', 'maxlength="40" placeholder="예: 급여, 용돈"') +
     field('날짜', 'f-date', 'date', cur ? cur.d : t, 'max="' + t + '"') + (cur ? delBtn('inc|' + eid) : '') + ERR;
   openSheet(cur ? '수입 수정' : '수입 추가', body, () => {
-    const d = val('f-date'), amt = Math.round(parseFloat(val('f-amt')));
+    const d = val('f-date'), amt = readMoney('f-amt');
     if (!d || d > t) return setErr('날짜를 확인해 주세요.');
     if (!(amt > 0)) return setErr('금액을 입력해 주세요.');
     const rec = cur || { id: uid() };
@@ -1794,13 +1814,13 @@ function sheetFixed(fid) {
   if (fid && !cur) return;
   const vals = { cat: cur ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '' };
   const body = field('이름', 'f-name', 'text', cur ? cur.name : '', 'maxlength="20" placeholder="예: 월세, 통신비"') +
-    '<div class="two">' + field('금액 (원)', 'f-amt', 'number', cur ? cur.amt : '', 'inputmode="numeric" step="1000" min="0"') + field('매월 몇 일', 'f-day', 'number', cur ? cur.day : '', 'inputmode="numeric" step="1" min="1" max="31" placeholder="1~31"') + '</div>' +
+    '<div class="two">' + mfield('금액 (원)', 'f-amt', cur ? cur.amt : '', '') + field('매월 몇 일', 'f-day', 'number', cur ? cur.day : '', 'inputmode="numeric" step="1" min="1" max="31" placeholder="1~31"') + '</div>' +
     '<div class="fld"><label>카테고리</label>' + chipsHtml('cat', cats.map(c => ({ v: c.id, l: c.name })), vals.cat) + '</div>' +
     '<div class="fld" id="subwrap">' + subChips(vals.cat, vals.sub) + '</div>' +
     '<p class="fhint">정한 날이 되면 지출 내역에 자동으로 들어가요. 말일보다 큰 날짜는 그 달의 마지막 날에 들어가요.</p>' +
     (cur ? '<button type="button" class="btn ghost danger" data-act="delRec" data-arg="fixed|' + fid + '">고정 지출 삭제</button>' : '') + ERR;
   openSheet(cur ? '고정 지출 수정' : '고정 지출 추가', body, () => {
-    const name = val('f-name').trim(), amt = Math.round(parseFloat(val('f-amt'))), day = Math.round(parseFloat(val('f-day')));
+    const name = val('f-name').trim(), amt = readMoney('f-amt'), day = Math.round(parseFloat(val('f-day')));
     if (!name) return setErr('이름을 입력해 주세요.');
     if (!(amt > 0)) return setErr('금액을 입력해 주세요.');
     if (!(day >= 1 && day <= 31)) return setErr('날짜는 1~31 사이로 입력해 주세요.');
@@ -1932,14 +1952,32 @@ function sheetGoal(eid, gid) {
 const splitNames = txt => { const out = []; String(txt).split(/[,，、\n]/).forEach(x => { x = x.trim(); if (x && out.indexOf(x) < 0 && out.length < 12) out.push(x); }); return out; };
 function sheetAddCat() {
   const body = field('카테고리 이름', 'f-name', 'text', '', 'maxlength="12" placeholder="예: 데이트"') +
-    field('월 예산 (원)', 'f-w', 'number', '', 'inputmode="numeric" step="10000" min="0" placeholder="150000"') +
+    mfield('월 예산 (원)', 'f-w', '', 'placeholder="150,000"') +
     field('세부 항목 (선택, 쉼표로 구분)', 'f-subs', 'text', '', 'placeholder="예: 식비, 주차비, 문화생활, 교통비"') + ERR;
   openSheet('카테고리 추가', body, () => {
-    const name = val('f-name').trim(), w = Math.round(parseFloat(val('f-w')));
+    const name = val('f-name').trim(), w = readMoney('f-w');
     if (!name) return setErr('이름을 입력해 주세요.');
-    S.settings.cats.push({ id: 'c' + uid(), name: name, monthly: w > 0 ? w : 0, subs: splitNames(val('f-subs')).map(n => ({ id: 's' + uid(), name: n })) });
+    S.settings.cats.push({ id: 'c' + uid(), name: name, monthly: w, subs: splitNames(val('f-subs')).map(n => ({ id: 's' + uid(), name: n })) });
     done('추가했어요');
   });
+}
+/* 카테고리 하나를 한 창에서 고쳐요 (이름·예산·세부 항목·삭제) */
+function sheetCat(cid) {
+  const c = S.settings.cats.find(x => x.id === cid);
+  if (!c) return;
+  const base = NAV.bmode === 'base', ym = NAV.bm || monthOf(0);
+  const body = field('이름', 'f-name', 'text', c.name, 'maxlength="12"') +
+    mfield(base ? '기본 월 예산 (원)' : ymLabel(ym) + ' 예산 (원)', 'f-w', base ? c.monthly : budgetCat(c, ym), 'placeholder="0"') +
+    field('세부 항목 (쉼표로 구분)', 'f-subs', 'text', c.subs.map(x => x.name).join(', '), 'placeholder="예: 식비, 주차비"') +
+    '<button type="button" class="btn ghost danger" data-act="delCat" data-arg="' + c.id + '">이 카테고리 삭제</button>' + ERR;
+  openSheet('카테고리 수정', body, () => {
+    const name = val('f-name').trim(), w = readMoney('f-w');
+    if (!name) return setErr('이름을 입력해 주세요.');
+    c.name = name;
+    if (base) c.monthly = w; else ensureBudget(ym).cats[c.id] = w;
+    const old = c.subs; c.subs = splitNames(val('f-subs')).map(n => { const o = old.find(x => x.name === n); return o || { id: 's' + uid(), name: n }; });
+    done();
+  }, { focus: false });
 }
 function sheetAddSub(cid) {
   const c = S.settings.cats.find(x => x.id === cid);
@@ -2035,7 +2073,7 @@ function sheetWish(wid) {
   if (wid && !cur) return;
   const vals = { prio: cur && cur.prio === '높음' ? '높음' : '보통', status: cur && cur.done ? 'done' : 'open' };
   const body = field('갖고 싶은 것', 'f-title', 'text', cur ? cur.name : '', 'maxlength="60" placeholder="예: 러닝화"') +
-    field('예상 가격 (원, 선택)', 'f-price', 'number', cur && cur.price ? cur.price : '', 'inputmode="numeric" step="1000" min="0" placeholder="0"') +
+    mfield('예상 가격 (원, 선택)', 'f-price', cur && cur.price ? cur.price : '', 'placeholder="0"') +
     '<div class="fld"><label>우선순위</label>' + chipsHtml('prio', ['높음', '보통'].map(x => ({ v: x, l: x })), vals.prio) + '</div>' +
     field('링크 (선택)', 'f-link', 'url', cur ? cur.link : '', 'maxlength="300" placeholder="https://"') +
     area('메모 (선택)', 'f-memo', cur ? cur.memo : '', 'maxlength="200" rows="3" placeholder="사려는 이유, 색상, 사이즈 등"') +
@@ -2043,7 +2081,7 @@ function sheetWish(wid) {
     '<div id="donewrap" style="display:' + (vals.status === 'done' ? 'block' : 'none') + '">' + field('구입한 날', 'f-date', 'date', cur && cur.doneAt ? cur.doneAt : t, 'max="' + t + '"') + '</div>' +
     (cur ? delBtn('wish|' + wid) : '') + ERR;
   openSheet(cur ? '위시리스트 수정' : '위시리스트 추가', body, () => {
-    const name = val('f-title').trim(), price = Math.round(parseFloat(val('f-price')) || 0), link = val('f-link').trim();
+    const name = val('f-title').trim(), price = readMoney('f-price'), link = val('f-link').trim();
     if (!name) return setErr('이름을 입력해 주세요.');
     if (link && !safeUrl(link)) return setErr('링크는 http:// 또는 https:// 로 시작해야 해요.');
     const rec = cur || { id: 'w' + uid() }, wasDone = !!(cur && cur.done);
@@ -2061,10 +2099,10 @@ function askWishExpense(it) {
   if (!(it.price > 0) || !S.settings.show.money || linked) return;
   const cats = S.settings.cats, vals = { cat: cats.length ? cats[0].id : '' };
   const body = '<p class="cmsg">‘' + esc(it.name) + '’을(를) 샀어요. 가계부에도 지출로 남길까요?</p>' +
-    field('금액 (원)', 'f-amt', 'number', it.price, 'inputmode="numeric" step="1000" min="0"') +
+    mfield('금액 (원)', 'f-amt', it.price, '') +
     '<div class="fld"><label>카테고리</label>' + chipsHtml('cat', cats.map(c => ({ v: c.id, l: c.name })), vals.cat) + '</div>' + ERR;
   openSheet('가계부에 기록할까요?', body, () => {
-    const amt = Math.round(parseFloat(val('f-amt')));
+    const amt = readMoney('f-amt');
     if (!(amt > 0)) return setErr('금액을 입력해 주세요.');
     const rec = { id: uid(), d: it.doneAt || todayStr(), cat: SHEET.vals.cat, amt: amt, memo: it.name };
     S.logs.exp.push(rec); it.expId = rec.id;
@@ -2369,6 +2407,8 @@ const ACT = {
   logEx(arg) { sheetLogEx(arg); },
   logSleep(arg) { sheetSleep(arg || todayStr()); },
   logMoney() { sheetMoney(); },
+  logCorp() { sheetMoney(undefined, true); },
+  editCat(arg) { sheetCat(arg); },
   logFaith() { sheetFaith(); },
   check(arg) {
     const t = todayStr(), p = arg.split(':');
@@ -2538,6 +2578,7 @@ const ACT = {
 };
 const INP = {
   runPrev(arg, el) { const c = el.id === 'f-val' ? decimal(el.value) : digits(el.value); if (c !== el.value) el.value = c; updateRunPreview(); },
+  money(arg, el) { const d = String(el.value).replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''), f = d ? fmtN(Number(d), 0) : ''; if (f !== el.value) el.value = f; },
   num(arg, el) { const c = decimal(el.value); if (c !== el.value) el.value = c; }
 };
 const CHG = {
