@@ -525,3 +525,28 @@ html[data-side] #toast{bottom:32px}
 .cmpc{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .cmph{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:15px}
 .cmph span{font-size:14px;color:var(--text2)}
+
+.ctiles{align-items:start;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:6px}
+@media (min-width:600px){.ctiles{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
+.ctile{background:var(--track2);border-radius:16px;padding:10px 12px;min-width:0}
+.ctile.over{box-shadow:inset 0 0 0 1.5px var(--bad)}
+.ctb{display:flex;align-items:center;gap:10px;width:100%;padding:0;border:0;background:transparent;text-align:left;color:inherit;min-height:60px}
+.ring{width:56px;height:56px;flex:none}
+.ring .rt{font-size:13px;font-weight:700;fill:var(--text);font-family:inherit}
+.cti{display:flex;flex-direction:column;min-width:0;gap:1px}
+.ctn{font-size:14px;font-weight:600;display:inline-flex;align-items:center}
+.ctv{font-size:17px;font-weight:700;letter-spacing:-.3px}
+.cts{font-size:12px;color:var(--sub)}.cts.neg{color:var(--bad);font-weight:600}.cts.okc{color:var(--good)}
+.ctile .subs{margin:6px 0 0}
+.fcb{display:flex;align-items:center;justify-content:center;width:100%;min-height:42px;border:0;background:transparent;padding:0}
+.fcb:disabled{cursor:default}
+.fc.fut{background:transparent;border:1.5px dashed var(--sub2);opacity:.5}
+.fhead .tod{color:var(--ct);font-weight:800}
+.fhead span{line-height:1.3}
+.fwn{display:flex;gap:2px}
+.fwn button{width:44px;height:44px;border:0;background:var(--track2);border-radius:12px;color:var(--link);display:flex;align-items:center;justify-content:center}
+.fwn button:disabled{opacity:.35}
+.bibrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.bibn{text-align:center;flex:1}
+.drow2{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:52px;padding:0 16px;border:0;background:transparent;font-size:15px;font-weight:600;color:var(--text);text-align:left}
+.ansn{display:inline-flex;align-items:center;gap:6px;color:var(--sub);font-weight:500}
