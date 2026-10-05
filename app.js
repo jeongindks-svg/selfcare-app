@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 12;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 13;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -66,7 +66,7 @@ function defaultState() {
         { id: 'push', name: '팔굽혀펴기', unit: '회', goal: 40, weekly: 200, cls: 'push', kind: 'strength', decimals: 0, minutes: false, goals: [] }
       ],
       sleepGoal: 7, rate: true,
-      monthly: 800000, monthBudgets: {},
+      monthly: 800000, monthBudgets: {}, cmpCats: [],
       cats: [
         { id: 'c1', name: '식비', monthly: 300000, subs: [] }, { id: 'c2', name: '교통', monthly: 100000, subs: [] },
         { id: 'c3', name: '카페', monthly: 80000, subs: [] }, { id: 'c4', name: '쇼핑', monthly: 100000, subs: [] },
@@ -92,6 +92,7 @@ function normalize(o) {
   s.settings.show = Object.assign({}, d.settings.show, os.show || {});
   ['exercises', 'cats', 'faith', 'topics', 'fixed'].forEach(k => { if (!Array.isArray(s.settings[k])) s.settings[k] = d.settings[k]; });
   s.settings.exercises = s.settings.exercises.map(e => Object.assign({}, e, { cls: e.kind === 'strength' ? 'push' : 'run', goals: Array.isArray(e.goals) ? e.goals : [] }));
+  if (!Array.isArray(s.settings.cmpCats)) s.settings.cmpCats = [];
   if (!s.settings.monthBudgets || typeof s.settings.monthBudgets !== 'object' || Array.isArray(s.settings.monthBudgets)) s.settings.monthBudgets = {};
   s.settings.topics = s.settings.topics.map(t => ({ id: t.id, text: t.text, done: !!t.done }));
   s.settings.fixed = s.settings.fixed.map(f => Object.assign({}, f, { applied: f.applied || {} }));
@@ -1179,60 +1180,69 @@ function viewCal() {
 }
 
 /* ---------- 가계부 통계 ---------- */
+/* 카테고리 월별 비교에 쓰는 작은 막대 */
+function miniBars(vals, labels) {
+  const mx = Math.max(1, maxOf(vals));
+  return '<div class="mini">' + vals.map((v, i) => '<div class="mcol"><div class="mv">' + (v > 0 ? (v >= 100000 ? Math.round(v / 10000) : (v / 10000).toFixed(1)) + '만' : '') + '</div><div class="mbar' + (i === vals.length - 1 ? ' hi' : '') + '" style="height:' + Math.max(3, Math.round(v / mx * 56)) + 'px"></div><div class="ml2">' + labels[i] + '</div></div>').join('') + '</div>';
+}
+const diffText = (a, b, goodUp) => { if (b == null || (!a && !b)) return ''; const d = a - b; return '<span class="df ' + (d === 0 ? '' : ((d > 0) === goodUp ? 'up' : 'down')) + '">' + (d === 0 ? '변화 없음' : (d > 0 ? '▲ ' : '▼ ') + won(Math.abs(d))) + '</span>'; };
 function viewMStat() {
   const cur = monthOf(0);
   if (!NAV.stat || NAV.stat > cur) NAV.stat = cur;
   const ym = NAV.stat, D = monthData(ym), prev = monthData(monthShift(ym, -1)), st = S.settings;
-  const bal = D.income - D.spent, budget = budgetTotal(ym), pct = budget > 0 ? D.spent / budget * 100 : 0;
+  const rest = D.income - D.spent - D.invSum, budget = budgetTotal(ym), pct = budget > 0 ? D.spent / budget * 100 : 0;
+  const months = []; for (let i = 5; i >= 0; i--) months.push(monthShift(ym, -i));
+  const md6 = months.map(m => monthData(m)), mlab = months.map(m => (+m.slice(5)) + '월');
   let h = backHdr('가계부 통계', 'money', 'money', '') + monthNav(ymLabel(ym), 'statMonth', ym < cur) + '<!--cols-->';
-  h += '<section class="card c-money"><div class="kv3"><div><div class="gl1">수입</div><div class="gl2 inc">' + (D.income > 0 ? won(D.income) : dash) + '</div></div><div><div class="gl1">지출</div><div class="gl2">' + (D.spent > 0 ? won(D.spent) : dash) + '</div></div><div><div class="gl1">수지</div><div class="gl2 ' + (bal >= 0 ? 'inc' : 'neg') + '">' + (D.income > 0 || D.spent > 0 ? swon(bal) : dash) + '</div></div></div>' +
-    '<div class="gl"><span>' + ymLabel(ym) + ' 예산 ' + Math.round(pct) + '% 사용</span><span>' + won(D.spent) + ' / ' + won(budget) + '</span></div><div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
-    '<div class="sm cap">' + (D.income > 0 ? '저축률 ' + Math.round(bal / D.income * 100) + '% · ' : '') + (budget > 0 ? (budget - D.spent >= 0 ? '남은 예산 ' + won(budget - D.spent) : '예산 초과 ' + won(D.spent - budget)) : '예산이 없어요') + '</div></section>';
+  // 1) 최종 남는 금액 (수입 − 지출 − 투자)
+  h += '<section class="card c-money" aria-label="최종 남는 금액"><div class="ml">' + ymLabel(ym) + ' 최종 남는 금액</div><div class="big ' + (rest >= 0 ? 'inc' : 'neg') + '">' + (D.income > 0 || D.spent > 0 || D.invSum > 0 ? swon(rest) : dash) + '</div>' +
+    '<div class="sm">수입 − 지출 − 투자' + (D.income > 0 ? ' · 수입의 ' + Math.round(rest / D.income * 100) + '%' : '') + '</div>' +
+    '<div class="calc3"><div class="cl"><span>수입</span><b class="inc">+' + won(D.income) + '</b></div><div class="cl"><span>지출</span><b>−' + won(D.spent) + '</b></div><div class="cl"><span>투자</span><b>−' + won(D.invSum) + '</b></div><div class="cl tot"><span>남는 돈</span><b class="' + (rest >= 0 ? 'inc' : 'neg') + '">' + swon(rest) + '</b></div></div>' +
+    '<div class="gl"><span>예산 ' + Math.round(pct) + '% 사용</span><span>' + won(D.spent) + ' / ' + won(budget) + '</span></div><div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
+    (D.corpSum > 0 ? '<div class="sm cap">회사카드 ' + won(D.corpSum) + '은 별도라 계산에 넣지 않았어요</div>' : '') + '</section>';
+  // 2) 도넛
+  if (D.income > 0 || D.spent > 0 || D.invSum > 0) {
+    const base = Math.max(D.income, D.spent + D.invSum);
+    const parts = [{ name: '지출', v: D.spent, color: DONUT_COLORS[0] }, { name: '투자', v: D.invSum, color: DONUT_COLORS[1] }, { name: '남는 돈', v: Math.max(0, D.income - D.spent - D.invSum), color: DONUT_COLORS[5] }].filter(x => x.v > 0);
+    h += '<section class="card c-money"><div class="sh2"><div class="a1b">수입은 어디로 갔나요</div></div>' + donut(parts, won(base), D.income > 0 ? '총 수입' : '총 사용', '수입 사용 비중') + '</section>';
+  }
   const ids0 = Object.keys(D.byCat).sort((a, b) => D.byCat[b] - D.byCat[a]);
   if (ids0.length) {
     const top = ids0.slice(0, 7).map((id, i) => { const c = st.cats.find(x => x.id === id); return { name: c ? c.name : '기타', v: D.byCat[id], color: DONUT_COLORS[i] }; });
     const restV = sum(ids0.slice(7).map(id => D.byCat[id]));
     if (restV > 0) top.push({ name: '그 외', v: restV, color: DONUT_COLORS[7] });
-    h += '<section class="card c-money"><div class="sh2"><div class="a1b">어디에 썼나요 · 카테고리 비중</div></div>' + donut(top, won(D.spent), '총 지출', '카테고리별 지출 비중') + '</section>';
+    h += '<section class="card c-money"><div class="sh2"><div class="a1b">지출 카테고리 비중</div></div>' + donut(top, won(D.spent), '총 지출', '카테고리별 지출 비중') + '</section>';
   }
-  if (D.income > 0) {
-    const parts = [{ name: '지출', v: D.spent, color: DONUT_COLORS[0] }, { name: '투자', v: D.invSum, color: DONUT_COLORS[1] }, { name: '남은 돈', v: Math.max(0, D.income - D.spent - D.invSum), color: DONUT_COLORS[5] }].filter(x => x.v > 0);
-    h += '<section class="card c-money"><div class="sh2"><div class="a1b">수입은 어디로 갔나요</div></div>' + donut(parts, won(D.income), '총 수입', '수입 사용 비중') + '</section>';
-  }
-  // 최근 6개월 수입 vs 지출
-  const months = []; for (let i = 5; i >= 0; i--) months.push(monthShift(ym, -i));
-  const md6 = months.map(m => monthData(m));
-  h += '<section class="card c-money"><div class="sh2"><div class="a1b">최근 6개월 수입 · 지출</div></div>' + flowChart(md6) + '<div class="callg"><span class="lg-inc"><i class="cd"></i>수입</span><span class="lg-exp"><i class="cd"></i>지출</span></div></section>';
-  // 요약 지표
-  const days = D.elapsed, avgDay = days > 0 ? D.spent / days : 0;
-  const topDay = Object.keys(D.byDay).sort((a, b) => D.byDay[b] - D.byDay[a])[0], biggest = D.exp.reduce((b, x) => !b || x.amt > b.amt ? x : b, null);
-  const fixedSum = sum(D.exp.filter(x => x.fixed).map(x => x.amt)), vs = prev.spent > 0 ? Math.round((D.spent - prev.spent) / prev.spent * 100) : null;
+  h += '<!--col-->';
+  // 3) 월별 한눈에 표
+  h += '<section class="card c-money"><div class="sh2"><div class="a1b">최근 6개월 한눈에</div></div><div class="mtab"><div class="mr th"><span>월</span><span>수입</span><span>지출</span><span>투자</span><span>남는 돈</span></div>' + md6.slice().reverse().map(m => {
+    const r = m.income - m.spent - m.invSum, k = v => v > 0 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + '만' : dash;
+    return '<div class="mr' + (m.ym === ym ? ' cur' : '') + '"><span>' + (+m.ym.slice(5)) + '월</span><span>' + k(m.income) + '</span><span>' + k(m.spent) + '</span><span>' + k(m.invSum) + '</span><span class="' + (r >= 0 ? 'inc' : 'neg') + '">' + (m.income > 0 || m.spent > 0 || m.invSum > 0 ? (r < 0 ? '−' : '') + k(Math.abs(r)) : dash) + '</span></div>';
+  }).join('') + '</div></section>';
+  // 4) 수입 월별 비교
+  const incs = md6.map(m => m.income), avgInc = sum(incs) / Math.max(1, incs.filter(v => v > 0).length);
+  const src = {}; [D, prev].forEach((m, k) => m.inc.forEach(x => { const n = x.memo || '수입'; (src[n] = src[n] || [0, 0])[k] += x.amt; }));
+  const srcNames = Object.keys(src).sort((a, b) => src[b][0] + src[b][1] - src[a][0] - src[a][1]).slice(0, 6);
+  h += '<section class="card c-money"><div class="sh2"><div class="a1b">수입 월별 비교</div></div>' + miniBars(incs, mlab) +
+    '<div class="trow2"><span class="tl">이번 달 vs 지난달</span><span class="tv">' + (D.income > 0 || prev.income > 0 ? diffText(D.income, prev.income, true) : dash) + '</span></div>' +
+    '<div class="trow2"><span class="tl">6개월 평균 (수입 있는 달)</span><span class="tv">' + (sum(incs) > 0 ? won(Math.round(avgInc)) : dash) + '</span></div>' +
+    (srcNames.length ? '<div class="srch"><span>수입 종류</span><span>' + (+ym.slice(5)) + '월</span><span>지난달</span></div>' + srcNames.map(n => '<div class="srow"><span>' + esc(n) + '</span><span>' + (src[n][0] ? won(src[n][0]) : dash) + '</span><span>' + (src[n][1] ? won(src[n][1]) : dash) + '</span></div>').join('') : '<div class="emptyin">수입을 입력하면 월별로 비교해 드려요.</div>') + '</section>';
+  // 5) 카테고리 월별 비교
+  const cmp = st.cmpCats.filter(id => st.cats.some(c => c.id === id)), shown = cmp.length ? cmp : ids0.filter(id => id !== '__etc').slice(0, 2);
+  h += '<section class="card c-money"><div class="sh2"><div class="a1b">카테고리 월별 비교</div></div><p class="fhint cmphint">비교할 카테고리를 눌러 고르세요</p><div class="chipsel">' + st.cats.map(c => '<button type="button" class="cs' + (shown.indexOf(c.id) >= 0 ? ' on' : '') + '" data-act="cmpCat" data-arg="' + c.id + '" aria-pressed="' + (shown.indexOf(c.id) >= 0) + '">' + esc(c.name) + '</button>').join('') + '</div>' +
+    (shown.length ? shown.map(id => {
+      const c = st.cats.find(x => x.id === id), vals = months.map(m => catSpentMonth(id, m)), a = vals[5], b = vals[4];
+      return '<div class="cmpc"><div class="cmph"><b>' + esc(c.name) + '</b><span>' + won(a) + ' ' + diffText(a, b, false) + '</span></div>' + miniBars(vals, mlab) + '</div>';
+    }).join('') : '<div class="emptyin">카테고리를 골라 보세요.</div>') + '</section>';
+  // 6) 요약
+  const days = D.elapsed, fixedSum = sum(D.exp.filter(x => x.fixed).map(x => x.amt)), vs = prev.spent > 0 ? Math.round((D.spent - prev.spent) / prev.spent * 100) : null;
   const rows = [
-    ['하루 평균 지출', days > 0 ? won(Math.round(avgDay)) : dash],
-    ['지출 건수', D.count + '건'],
-    ['가장 많이 쓴 날', topDay ? md(topDay) + ' · ' + won(D.byDay[topDay]) : dash],
-    ['가장 큰 지출', biggest ? esc(biggest.memo || catName(biggest.cat)) + ' · ' + won(biggest.amt) : dash],
-    ['투자 (별도)', D.invSum > 0 ? won(D.invSum) + ' · ' + D.invs.length + '건' : dash],
-    ['회사카드 사용 (별도)', D.corpSum > 0 ? won(D.corpSum) + ' · ' + D.corp.length + '건' : dash],
+    ['하루 평균 지출', days > 0 ? won(Math.round(D.spent / days)) : dash],
+    ['지난달 대비 지출', vs == null ? dash : (vs > 0 ? '+' : vs < 0 ? '−' : '') + Math.abs(vs) + '%'],
     ['고정 지출', fixedSum > 0 ? won(fixedSum) + ' (' + Math.round(fixedSum / D.spent * 100) + '%)' : dash],
-    ['지난달 대비 지출', vs == null ? dash : (vs > 0 ? '+' : vs < 0 ? '−' : '') + Math.abs(vs) + '%']
+    ['회사카드 (별도)', D.corpSum > 0 ? won(D.corpSum) + ' · ' + D.corp.length + '건' : dash]
   ];
-  h += '<section class="card tbl c-money" aria-label="지출 요약">' + rows.map(r => '<div class="trow2"><span class="tl">' + r[0] + '</span><span class="tv">' + r[1] + '</span></div>').join('') + '</section><!--col-->';
-  // 카테고리별
-  const ids = Object.keys(D.byCat).sort((a, b) => D.byCat[b] - D.byCat[a]);
-  h += '<section class="card list c-money" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리별 지출</div></div>' + (ids.length ? ids.map(id => {
-    const cat = st.cats.find(x => x.id === id), v = D.byCat[id], share = D.spent > 0 ? v / D.spent * 100 : 0, cb = cat ? budgetCat(cat, ym) : 0;
-    return '<div class="catrow"><div class="cr1"><span class="cn">' + esc(cat ? cat.name : '기타') + '</span><span class="cv"><b>' + won(v) + '</b> · ' + share.toFixed(0) + '%</span></div><div class="track"><div style="width:' + share.toFixed(1) + '%"></div></div>' +
-      (cb > 0 ? '<div class="sm cap">예산 ' + won(cb) + ' 중 ' + Math.round(v / cb * 100) + '%' + (v > cb ? ' · 초과' : '') + '</div>' : '') + '</div>';
-  }).join('') : '<div class="emptyrow">이 달 지출 내역이 없어요.</div>') + '</section>';
-  // 요일별
-  const wd = [0, 0, 0, 0, 0, 0, 0];
-  Object.keys(D.byDay).forEach(d => { wd[parseD(d).getDay()] += D.byDay[d]; });
-  if (D.spent > 0) h += '<section class="card c-money"><div class="sh2"><div class="a1b">요일별 지출 합계</div></div>' + barChart({ items: wd.map((v, i) => ({ label: WD[i], value: v })), cls: 'money', fmt: v => (v / 10000).toFixed(1) + '만' }) + '</section>';
-  // 수입 내역
-  const inc = D.inc.slice().sort(byDateDesc);
-  h += '<section class="group c-money"><div class="gh">수입 내역 <span class="hint">' + (inc.length ? inc.length + '건 · 눌러서 수정' : '') + '</span></div>' + (inc.length ? inc.slice(0, 10).map(x => entryRow('inc|' + x.id, esc(x.memo || '수입'), md(x.d), '+' + won(x.amt), 'inc')).join('') : '<div class="emptyrow">이 달 수입 내역이 없어요.</div>') +
-    '<button type="button" class="addrow" data-act="logIncome">' + ico('plus', 18, 2) + '수입 추가</button></section>';
+  h += '<section class="card tbl c-money" aria-label="요약">' + rows.map(r => '<div class="trow2"><span class="tl">' + r[0] + '</span><span class="tv">' + r[1] + '</span></div>').join('') + '</section>';
   return h;
 }
 /* 도넛 그래프: 조각마다 색이 달라서 한눈에 비중이 보여요 */
@@ -1249,23 +1259,6 @@ function donut(parts, centerTop, centerBot, label) {
   });
   svg += '<text class="dt1" x="100" y="96" text-anchor="middle">' + esc(centerTop) + '</text><text class="dt2" x="100" y="118" text-anchor="middle">' + esc(centerBot) + '</text></svg>';
   return '<div class="donutwrap">' + svg + '<div class="dlegend">' + parts.map(x => '<div class="dl"><i style="background:' + x.color + '"></i><span class="dn">' + esc(x.name) + '</span><span class="dv">' + Math.round(x.v / total * 100) + '%</span></div>').join('') + '</div></div>';
-}
-/* 수입(초록)·지출(금색) 두 막대 */
-function flowChart(list) {
-  const W = 326, left = 6, right = 320, top = 18, bot = 150, n = list.length, step = (right - left) / n;
-  const mx = Math.max(1, maxOf(list.map(x => x.income)), maxOf(list.map(x => x.spent)));
-  const Y = v => bot - v / mx * (bot - top);
-  let s = '<svg class="chart flow" viewBox="0 0 ' + W + ' 176" role="img" aria-label="최근 6개월 수입과 지출 막대 그래프"><path class="grid" d="M' + left + ' ' + bot + ' H' + right + '"/>';
-  list.forEach((m, i) => {
-    const x0 = left + i * step + (step - 40) / 2, last = i === n - 1;
-    [[m.income, 'finc'], [m.spent, 'fexp']].forEach((b, k) => {
-      const x = x0 + k * 21, h = b[0] > 0 ? Math.max(3, bot - Y(b[0])) : 0;
-      if (h) s += '<rect class="' + b[1] + (last ? ' hi' : '') + '" x="' + x.toFixed(1) + '" y="' + (bot - h).toFixed(1) + '" width="19" height="' + h.toFixed(1) + '" rx="5"/>';
-      if (last && b[0] > 0) s += '<text class="lbl" text-anchor="middle" x="' + (x + 9.5).toFixed(1) + '" y="' + (bot - h - 5).toFixed(1) + '">' + (b[0] / 10000).toFixed(b[0] >= 100000 ? 0 : 1) + '만</text>';
-    });
-    s += '<text class="axis" text-anchor="middle" x="' + (x0 + 20).toFixed(1) + '" y="168">' + (+m.ym.slice(5)) + '월</text>';
-  });
-  return s + '</svg>';
 }
 
 /* ---------- 운동 상세 ---------- */
@@ -1446,22 +1439,17 @@ function expRow(x) {
 const catName = id => { const c = S.settings.cats.find(x => x.id === id); return c ? c.name : '기타'; };
 const subName = (cid, sid) => { const c = S.settings.cats.find(x => x.id === cid); const s = c && c.subs.find(x => x.id === sid); return s ? s.name : ''; };
 function viewMoney() {
-  const st = S.settings, r = NAV.range, info = RANGE[r], m = moneyStats();
-  const bs = buckets(r, d => spendOn(d), 'sum');
-  const avg = bucketAvg(bs) || 0;
-  const fmtM = v => (v / 10000).toFixed(1) + '만';
-  let h = backHdr('가계부', 'money', 'money', editLink('money')) + segCtl() + '<!--cols-->';
-  h += '<section class="card c-money"><div class="ml">' + info.avgLabel + '</div><div class="big">' + won(avg) + '<span class="u">' + info.per + '</span></div><div class="sm">' + info.sumLabel + ' ' + won(bucketSum(bs)) + ' · 점선은 평균</div>' +
-    barChart({ items: bs, cls: 'money', avg: avg, fmt: fmtM }) + '</section>';
+  const st = S.settings, cur = monthOf(0), D = monthData(cur), P = monthData(monthShift(cur, -1)), now = new Date();
+  const budget = budgetTotal(cur), pct = budget > 0 ? D.spent / budget * 100 : 0, left = budget - D.spent;
+  const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
+  const rest = D.income - D.spent - D.invSum;
+  let h = backHdr('가계부', 'money', 'money', editLink('money')) + '<!--cols-->';
   h += '<div class="btnpair"><button type="button" class="btn c-money" data-act="logMoney" data-arg="">지출 추가</button><button type="button" class="btn ghost c-money" data-act="logIncome" data-arg="">수입 추가</button></div>';
-  h += '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">수입·지출 통계</span><span class="l2r">월별 종합 보기</span>' + CHEV + '</a>';
-  const pct = budgetTotal() > 0 ? m.month / budgetTotal() * 100 : 0;
-  const vs = m.lastSame > 0 ? Math.round((m.month - m.lastSame) / m.lastSame * 100) : null;
-  h += '<section class="card c-money" aria-label="이번 달"><div class="bigrow"><div class="a1">' + ymNow() + '</div><div class="sm nm">남은 예산 ' + swon(budgetTotal() - m.month) + '</div></div>' +
-    '<div class="big">' + won(m.month) + '<span class="u">/ ' + won(budgetTotal()) + '</span></div><div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
-    '<div class="kv3"><div><div class="gl1">수입</div><div class="gl2">' + (m.income > 0 ? won(m.income) : dash) + '</div></div><div><div class="gl1">남은 돈</div><div class="gl2">' + (m.income > 0 ? swon(m.income - m.month) : dash) + '</div></div><div><div class="gl1">지난달 대비</div><div class="gl2">' + (vs == null ? dash : (vs > 0 ? '+' : vs < 0 ? '−' : '') + Math.abs(vs) + '%') + '</div></div></div>' +
-    (m.lastTotal > 0 ? '<div class="sm cap">지난달 같은 날까지 ' + won(m.lastSame) + ' · 지난달 전체 ' + won(m.lastTotal) + '</div>' : '') + '</section>';
-  h += statTable('이번 주 평균', '개인 최고', [['하루 지출', won(m.avg), wonBest(m.pbDay)], ['주간 합계', won(m.sum7), wonBest(m.pbWeek)]], 'money');
+  h += '<section class="card c-money" aria-label="이번 달"><div class="bigrow"><div class="a1">' + ymNow() + ' 지출</div><div class="sm nm">' + (left >= 0 ? '남은 예산 ' + won(left) : '예산 초과 ' + won(-left)) + '</div></div>' +
+    '<div class="big">' + won(D.spent) + '<span class="u">/ ' + won(budget) + '</span></div><div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
+    '<div class="sm cap">' + (left > 0 ? '남은 ' + daysLeft + '일 동안 하루 ' + won(Math.floor(left / daysLeft)) + '까지 쓸 수 있어요' : '이번 달 예산을 다 썼어요') + (P.spent > 0 ? ' · 지난달 전체 ' + won(P.spent) : '') + '</div>' +
+    '<div class="kv3"><div><div class="gl1">수입</div><div class="gl2 inc">' + (D.income > 0 ? won(D.income) : dash) + '</div></div><div><div class="gl1">투자</div><div class="gl2">' + (D.invSum > 0 ? won(D.invSum) : dash) + '</div></div><div><div class="gl1">최종 남는 돈</div><div class="gl2 ' + (rest >= 0 ? 'inc' : 'neg') + '">' + (D.income > 0 ? swon(rest) : dash) + '</div></div></div></section>';
+  h += '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">월별 통계·비교</span><span class="l2r">수입·지출·투자 한눈에</span>' + CHEV + '</a>';
   h += '<!--col--><section class="card list c-money" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + ymNow() + ' 예산</div>' + editLink('money') + '</div>' + (st.cats.length ? st.cats.map(c => {
     const sp = catSpentMonth(c.id), cb = budgetCat(c), p = cb > 0 ? Math.round(sp / cb * 100) : (sp > 0 ? 100 : 0);
     const has = c.subs.length > 0, open = !!NAV.open[c.id];
@@ -1474,6 +1462,15 @@ function viewMoney() {
     }
     return r2 + '</div>';
   }).join('') : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section>';
+  const curM = monthOf(0), lm = NAV.lm && NAV.lm <= curM ? NAV.lm : curM;
+  const mdD = monthData(lm), items = mdD.exp.concat(mdD.corp, mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
+  let rows = '', lastD = null;
+  items.forEach(x => {
+    if (x.d !== lastD) { lastD = x.d; const sp = spendOn(x.d); rows += '<div class="dgh"><span>' + dateLabel(x.d) + '</span><span>' + (sp > 0 ? '−' + won(sp) : '') + '</span></div>'; }
+    rows += x.t === 'inc' ? entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc') : expRow(x);
+  });
+  h += '<section><div class="sh"><h2>내역</h2></div>' + monthNav(ymLabel(lm), 'lmMonth', lm < curM) + '</section>' +
+    '<section class="group"><div class="gh">' + (+lm.slice(5)) + '월 지출 ' + won(mdD.spent) + (mdD.income > 0 ? ' · 수입 ' + won(mdD.income) : '') + ' <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">이 달 내역이 없어요.</div>') + '</section>';
   const invAll = S.logs.exp.filter(x => x.inv).sort(byDateDesc), invMonth = sum(invAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
   h += '<section class="group c-faith"><div class="gh">투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + ymNow() + ' 투자</div><div class="gl2">' + won(invMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
@@ -1488,18 +1485,6 @@ function viewMoney() {
   h += '<section class="group c-money"><div class="gh">고정 지출 <span class="hint">매달 정해진 날 자동으로 입력돼요' + (fx.length ? ' · 합계 ' + won(fxSum) : '') + '</span></div>' + fx.map(f =>
     '<button type="button" class="erow" data-act="editFixed" data-arg="' + f.id + '"><span class="el"><span class="e1">' + esc(f.name) + '</span><span class="e2">매월 ' + f.day + '일 · ' + esc(catName(f.cat)) + (f.sub ? ' · ' + esc(subName(f.cat, f.sub)) : '') + '</span></span><span class="er">' + won(f.amt) + '</span></button>').join('') +
     '<button type="button" class="addrow" data-act="addFixed">' + ico('plus', 18, 2) + '고정 지출 추가</button></section>';
-  const ws = wishStats();
-  if (st.show.wish && ws.open) h += '<a href="#" class="group lstrow c-wish" data-act="go" data-arg="wish"><span class="l1">위시리스트</span><span class="l2r">' + ws.open + '개 · 합계 ' + won(ws.sum) + '</span>' + CHEV + '</a>';
-  const curM = monthOf(0), lm = NAV.lm && NAV.lm <= curM ? NAV.lm : curM;
-  const mdD = monthData(lm), items = mdD.exp.concat(mdD.corp, mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
-  let rows = '', lastD = null;
-  items.forEach(x => {
-    if (x.d !== lastD) { lastD = x.d; const sp = spendOn(x.d); rows += '<div class="dgh"><span>' + dateLabel(x.d) + '</span><span>' + (sp > 0 ? '−' + won(sp) : '') + '</span></div>'; }
-    rows += x.t === 'inc' ? entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc') : expRow(x);
-  });
-  h += '<section><div class="sh"><h2>내역</h2></div>' + monthNav(ymLabel(lm), 'lmMonth', lm < curM) + '</section>' +
-    '<section class="group"><div class="gh">' + (+lm.slice(5)) + '월 지출 ' + won(mdD.spent) + (mdD.income > 0 ? ' · 수입 ' + won(mdD.income) : '') + ' <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">이 달 내역이 없어요.</div>') + '</section>';
-  h += linkSection('money');
   return h;
 }
 
@@ -2443,6 +2428,7 @@ const ACT = {
   logMoney() { sheetMoney(); },
   logCorp() { sheetMoney(undefined, true); },
   logInv() { sheetMoney(undefined, 'inv'); },
+  cmpCat(arg) { const st = S.settings, cur = st.cmpCats.length ? st.cmpCats.slice() : Object.keys(monthData(NAV.stat || monthOf(0)).byCat).filter(id => id !== '__etc').sort((a, b) => monthData(NAV.stat || monthOf(0)).byCat[b] - monthData(NAV.stat || monthOf(0)).byCat[a]).slice(0, 2), i = cur.indexOf(arg); if (i >= 0) cur.splice(i, 1); else cur.push(arg); st.cmpCats = cur; commit(); render(); },
   lmMonth(arg) { NAV.lm = monthShift(NAV.lm || monthOf(0), Number(arg)); render(); },
   editCat(arg) { sheetCat(arg); },
   logFaith() { sheetFaith(); },
