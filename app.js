@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 11;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 12;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -119,7 +119,7 @@ function commit() { S.updatedAt = Date.now(); VER++; saveLocal(); queueSync(); }
 let IX = { ver: -1 };
 function ix() {
   if (IX.ver === VER) return IX;
-  const o = { ver: VER, ex: {}, corp: {}, spend: {}, spendCat: {}, inc: {}, first: null };
+  const o = { ver: VER, ex: {}, corp: {}, inv: {}, spend: {}, spendCat: {}, inc: {}, first: null };
   const upd = d => { if (!o.first || d < o.first) o.first = d; };
   Object.keys(S.logs.ex).forEach(id => {
     const m = {};
@@ -128,7 +128,7 @@ function ix() {
   });
   Object.keys(S.logs.sleep).forEach(upd);
   S.logs.exp.forEach(r => {
-    if (r.corp) { o.corp[r.d] = (o.corp[r.d] || 0) + r.amt; upd(r.d); return; }   // 회사카드는 내 지출에 넣지 않아요
+    if (r.corp || r.inv) { const k = r.inv ? o.inv : o.corp; k[r.d] = (k[r.d] || 0) + r.amt; upd(r.d); return; }   // 회사카드·투자는 내 지출에 넣지 않아요
     o.spend[r.d] = (o.spend[r.d] || 0) + r.amt;
     const c = o.spendCat[r.cat] = o.spendCat[r.cat] || {};
     c[r.d] = (c[r.d] || 0) + r.amt;
@@ -144,7 +144,7 @@ function ix() {
 const hasAnyData = () => !!ix().first;
 const exSum = (id, d) => (ix().ex[id] && ix().ex[id][d]) || 0;
 const spendOn = d => ix().spend[d] || 0;
-const corpOn = d => ix().corp[d] || 0;
+const corpOn = d => (ix().corp[d] || 0) + (ix().inv[d] || 0);
 const sleepOn = d => S.logs.sleep[d] || null;
 const faithRec = d => S.logs.faith[d] || {};
 function faithDone(d, it) {
@@ -481,8 +481,8 @@ function moneyStats() {
     pbWeek: maxOf(Object.keys(wk).map(k => wk[k]))
   };
 }
-function catSpentMonth(cid, ym) { const p = ym || monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && !x.corp && x.d.slice(0, 7) === p).map(x => x.amt)); }
-function subSpentMonth(cid, sid) { const p = monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && (x.sub || '') === sid && !x.corp && x.d.slice(0, 7) === p).map(x => x.amt)); }
+function catSpentMonth(cid, ym) { const p = ym || monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && !x.corp && !x.inv && x.d.slice(0, 7) === p).map(x => x.amt)); }
+function subSpentMonth(cid, sid) { const p = monthOf(0); return sum(S.logs.exp.filter(x => x.cat === cid && (x.sub || '') === sid && !x.corp && !x.inv && x.d.slice(0, 7) === p).map(x => x.amt)); }
 
 /* 월별 예산: 따로 정한 달은 그 값을, 아니면 기본 예산을 써요 */
 const budgetOf = ym => S.settings.monthBudgets[ym] || null;
@@ -497,14 +497,14 @@ function monthShift(ym, n) { const p = ym.split('-').map(Number), d = new Date(p
 const ymLabel = ym => ym.slice(0, 4) + '년 ' + (+ym.slice(5)) + '월';
 /* 한 달 수입·지출 집계 */
 function monthData(ym) {
-  const all = S.logs.exp.filter(x => x.d.slice(0, 7) === ym), exp = all.filter(x => !x.corp), corp = all.filter(x => x.corp), inc = S.logs.inc.filter(x => x.d.slice(0, 7) === ym);
+  const all = S.logs.exp.filter(x => x.d.slice(0, 7) === ym), exp = all.filter(x => !x.corp && !x.inv), corp = all.filter(x => x.corp), invs = all.filter(x => x.inv), inc = S.logs.inc.filter(x => x.d.slice(0, 7) === ym);
   const spent = sum(exp.map(x => x.amt)), income = sum(inc.map(x => x.amt));
   const known = {}; S.settings.cats.forEach(c => { known[c.id] = c; });
   const byCat = {}; exp.forEach(x => { const k = known[x.cat] ? x.cat : '__etc'; byCat[k] = (byCat[k] || 0) + x.amt; });
   const byDay = {}; exp.forEach(x => { byDay[x.d] = (byDay[x.d] || 0) + x.amt; });
   const p = ym.split('-').map(Number), dim = new Date(p[0], p[1], 0).getDate(), t = todayStr();
   const elapsed = ym === t.slice(0, 7) ? +t.slice(8) : (ym < t.slice(0, 7) ? dim : 0);
-  return { ym: ym, exp: exp, corp: corp, corpSum: sum(corp.map(x => x.amt)), inc: inc, spent: spent, income: income, byCat: byCat, byDay: byDay, dim: dim, elapsed: elapsed, count: exp.length };
+  return { ym: ym, exp: exp, corp: corp, corpSum: sum(corp.map(x => x.amt)), invs: invs, invSum: sum(invs.map(x => x.amt)), inc: inc, spent: spent, income: income, byCat: byCat, byDay: byDay, dim: dim, elapsed: elapsed, count: exp.length };
 }
 
 /* 신앙 */
@@ -858,7 +858,7 @@ function paceChart(items) {
 }
 
 /* ================= 화면 ================= */
-let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month' };
+let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '' };
 const ROUTE_TITLE = { today: '오늘', cats: '분야', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
@@ -1188,6 +1188,17 @@ function viewMStat() {
   h += '<section class="card c-money"><div class="kv3"><div><div class="gl1">수입</div><div class="gl2 inc">' + (D.income > 0 ? won(D.income) : dash) + '</div></div><div><div class="gl1">지출</div><div class="gl2">' + (D.spent > 0 ? won(D.spent) : dash) + '</div></div><div><div class="gl1">수지</div><div class="gl2 ' + (bal >= 0 ? 'inc' : 'neg') + '">' + (D.income > 0 || D.spent > 0 ? swon(bal) : dash) + '</div></div></div>' +
     '<div class="gl"><span>' + ymLabel(ym) + ' 예산 ' + Math.round(pct) + '% 사용</span><span>' + won(D.spent) + ' / ' + won(budget) + '</span></div><div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
     '<div class="sm cap">' + (D.income > 0 ? '저축률 ' + Math.round(bal / D.income * 100) + '% · ' : '') + (budget > 0 ? (budget - D.spent >= 0 ? '남은 예산 ' + won(budget - D.spent) : '예산 초과 ' + won(D.spent - budget)) : '예산이 없어요') + '</div></section>';
+  const ids0 = Object.keys(D.byCat).sort((a, b) => D.byCat[b] - D.byCat[a]);
+  if (ids0.length) {
+    const top = ids0.slice(0, 7).map((id, i) => { const c = st.cats.find(x => x.id === id); return { name: c ? c.name : '기타', v: D.byCat[id], color: DONUT_COLORS[i] }; });
+    const restV = sum(ids0.slice(7).map(id => D.byCat[id]));
+    if (restV > 0) top.push({ name: '그 외', v: restV, color: DONUT_COLORS[7] });
+    h += '<section class="card c-money"><div class="sh2"><div class="a1b">어디에 썼나요 · 카테고리 비중</div></div>' + donut(top, won(D.spent), '총 지출', '카테고리별 지출 비중') + '</section>';
+  }
+  if (D.income > 0) {
+    const parts = [{ name: '지출', v: D.spent, color: DONUT_COLORS[0] }, { name: '투자', v: D.invSum, color: DONUT_COLORS[1] }, { name: '남은 돈', v: Math.max(0, D.income - D.spent - D.invSum), color: DONUT_COLORS[5] }].filter(x => x.v > 0);
+    h += '<section class="card c-money"><div class="sh2"><div class="a1b">수입은 어디로 갔나요</div></div>' + donut(parts, won(D.income), '총 수입', '수입 사용 비중') + '</section>';
+  }
   // 최근 6개월 수입 vs 지출
   const months = []; for (let i = 5; i >= 0; i--) months.push(monthShift(ym, -i));
   const md6 = months.map(m => monthData(m));
@@ -1201,6 +1212,7 @@ function viewMStat() {
     ['지출 건수', D.count + '건'],
     ['가장 많이 쓴 날', topDay ? md(topDay) + ' · ' + won(D.byDay[topDay]) : dash],
     ['가장 큰 지출', biggest ? esc(biggest.memo || catName(biggest.cat)) + ' · ' + won(biggest.amt) : dash],
+    ['투자 (별도)', D.invSum > 0 ? won(D.invSum) + ' · ' + D.invs.length + '건' : dash],
     ['회사카드 사용 (별도)', D.corpSum > 0 ? won(D.corpSum) + ' · ' + D.corp.length + '건' : dash],
     ['고정 지출', fixedSum > 0 ? won(fixedSum) + ' (' + Math.round(fixedSum / D.spent * 100) + '%)' : dash],
     ['지난달 대비 지출', vs == null ? dash : (vs > 0 ? '+' : vs < 0 ? '−' : '') + Math.abs(vs) + '%']
@@ -1222,6 +1234,21 @@ function viewMStat() {
   h += '<section class="group c-money"><div class="gh">수입 내역 <span class="hint">' + (inc.length ? inc.length + '건 · 눌러서 수정' : '') + '</span></div>' + (inc.length ? inc.slice(0, 10).map(x => entryRow('inc|' + x.id, esc(x.memo || '수입'), md(x.d), '+' + won(x.amt), 'inc')).join('') : '<div class="emptyrow">이 달 수입 내역이 없어요.</div>') +
     '<button type="button" class="addrow" data-act="logIncome">' + ico('plus', 18, 2) + '수입 추가</button></section>';
   return h;
+}
+/* 도넛 그래프: 조각마다 색이 달라서 한눈에 비중이 보여요 */
+const DONUT_COLORS = ['#B7791F', '#5E5CE6', '#E0568F', '#0E8F8F', '#F26A21', '#2FA866', '#A855F7', '#2F7FEA'];
+function donut(parts, centerTop, centerBot, label) {
+  const total = sum(parts.map(x => x.v));
+  if (!(total > 0)) return '';
+  const R = 70, C = 2 * Math.PI * R, gap = parts.length > 1 ? 2 : 0;
+  let off = 0, svg = '<svg class="donut" viewBox="0 0 200 200" role="img" aria-label="' + esc(label) + '"><circle cx="100" cy="100" r="' + R + '" fill="none" stroke="var(--track)" stroke-width="28"/>';
+  parts.forEach(x => {
+    const len = x.v / total * C;
+    svg += '<circle cx="100" cy="100" r="' + R + '" fill="none" stroke="' + x.color + '" stroke-width="28" stroke-dasharray="' + Math.max(0, len - gap).toFixed(2) + ' ' + (C - Math.max(0, len - gap)).toFixed(2) + '" stroke-dashoffset="' + (-off).toFixed(2) + '" transform="rotate(-90 100 100)"/>';
+    off += len;
+  });
+  svg += '<text class="dt1" x="100" y="96" text-anchor="middle">' + esc(centerTop) + '</text><text class="dt2" x="100" y="118" text-anchor="middle">' + esc(centerBot) + '</text></svg>';
+  return '<div class="donutwrap">' + svg + '<div class="dlegend">' + parts.map(x => '<div class="dl"><i style="background:' + x.color + '"></i><span class="dn">' + esc(x.name) + '</span><span class="dv">' + Math.round(x.v / total * 100) + '%</span></div>').join('') + '</div></div>';
 }
 /* 수입(초록)·지출(금색) 두 막대 */
 function flowChart(list) {
@@ -1411,6 +1438,7 @@ function viewSleep() {
 
 /* ---------- 가계부 ---------- */
 function expRow(x) {
+  if (x.inv) return entryRow('exp|' + x.id, esc(x.memo || '투자'), '<span class="corptag inv">투자</span> 내 지출 아님', '−' + won(x.amt), 'corpamt');
   if (x.corp) return entryRow('exp|' + x.id, esc(x.memo || '회사카드'), '<span class="corptag">회사카드</span> 내 지출 아님', '−' + won(x.amt), 'corpamt');
   const sn = x.sub ? subName(x.cat, x.sub) : '';
   return entryRow('exp|' + x.id, esc(x.memo || sn || catName(x.cat)), esc(catName(x.cat)) + (sn ? ' · ' + esc(sn) : '') + (x.fixed ? ' · 고정' : ''), '−' + won(x.amt));
@@ -1446,6 +1474,11 @@ function viewMoney() {
     }
     return r2 + '</div>';
   }).join('') : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section>';
+  const invAll = S.logs.exp.filter(x => x.inv).sort(byDateDesc), invMonth = sum(invAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
+  h += '<section class="group c-faith"><div class="gh">투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
+    '<div class="corpsum"><div><div class="gl1">' + ymNow() + ' 투자</div><div class="gl2">' + won(invMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
+    invAll.slice(0, 5).map(x => entryRow('exp|' + x.id, esc(x.memo || '투자'), dateLabel(x.d), '−' + won(x.amt), 'corpamt')).join('') +
+    '<button type="button" class="addrow" data-act="logInv">' + ico('plus', 18, 2) + '투자 추가</button></section>';
   const corpAll = S.logs.exp.filter(x => x.corp).sort(byDateDesc), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
   h += '<section class="group c-money"><div class="gh">회사카드 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + ymNow() + ' 사용</div><div class="gl2">' + won(corpMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(corpAll.map(x => x.amt))) + '</div></div></div>' +
@@ -1457,16 +1490,15 @@ function viewMoney() {
     '<button type="button" class="addrow" data-act="addFixed">' + ico('plus', 18, 2) + '고정 지출 추가</button></section>';
   const ws = wishStats();
   if (st.show.wish && ws.open) h += '<a href="#" class="group lstrow c-wish" data-act="go" data-arg="wish"><span class="l1">위시리스트</span><span class="l2r">' + ws.open + '개 · 합계 ' + won(ws.sum) + '</span>' + CHEV + '</a>';
-  const items = S.logs.exp.map(x => Object.assign({ t: 'exp' }, x)).concat(S.logs.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc).slice(0, 14);
+  const curM = monthOf(0), lm = NAV.lm && NAV.lm <= curM ? NAV.lm : curM;
+  const mdD = monthData(lm), items = mdD.exp.concat(mdD.corp, mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
   let rows = '', lastD = null;
   items.forEach(x => {
     if (x.d !== lastD) { lastD = x.d; const sp = spendOn(x.d); rows += '<div class="dgh"><span>' + dateLabel(x.d) + '</span><span>' + (sp > 0 ? '−' + won(sp) : '') + '</span></div>'; }
-    if (x.t === 'inc') rows += entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc');
-    else {
-      rows += expRow(x);
-    }
+    rows += x.t === 'inc' ? entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc') : expRow(x);
   });
-  h += '<section class="group"><div class="gh">최근 내역 <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">아직 내역이 없어요.</div>') + '</section>';
+  h += '<section><div class="sh"><h2>내역</h2></div>' + monthNav(ymLabel(lm), 'lmMonth', lm < curM) + '</section>' +
+    '<section class="group"><div class="gh">' + (+lm.slice(5)) + '월 지출 ' + won(mdD.spent) + (mdD.income > 0 ? ' · 수입 ' + won(mdD.income) : '') + ' <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">이 달 내역이 없어요.</div>') + '</section>';
   h += linkSection('money');
   return h;
 }
@@ -1763,30 +1795,31 @@ const lastExpDate = () => { const t = todayStr(), d = S.lastExpDate; return d &&
 function sheetMoney(eid, corp) {
   const t = todayStr(), cats = S.settings.cats, cur = eid ? S.logs.exp.find(x => x.id === eid) : null;
   if (eid && !cur) return;
-  const isCorp = cur ? !!cur.corp : !!corp;
-  const vals = { cat: cur && cur.cat ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '', pay: isCorp ? 'corp' : 'mine' };
+  const isCorp = cur ? !!(cur.corp || cur.inv) : !!corp;
+  const vals = { cat: cur && cur.cat ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '', pay: cur ? (cur.inv ? 'inv' : cur.corp ? 'corp' : 'mine') : (corp === 'inv' ? 'inv' : corp ? 'corp' : 'mine') };
   const showNo = !cur && !spendOn(t) && !S.logs.nospend[t];
   const d0 = cur ? cur.d : lastExpDate();
   const body = mfield('금액 (원)', 'f-amt', cur ? cur.amt : '', 'placeholder="0"') +
-    '<div class="fld"><label>누구 돈이에요?</label>' + chipsHtml('pay', [{ v: 'mine', l: '내 지출' }, { v: 'corp', l: '회사카드' }], vals.pay) + '</div>' +
+    '<div class="fld"><label>종류</label>' + chipsHtml('pay', [{ v: 'mine', l: '내 지출' }, { v: 'corp', l: '회사카드' }, { v: 'inv', l: '투자' }], vals.pay) + '</div>' +
     '<div id="catwrap" style="display:' + (isCorp ? 'none' : 'block') + '"><div class="fld"><label>카테고리</label>' + chipsHtml('cat', cats.map(c => ({ v: c.id, l: c.name })), vals.cat) + '</div>' +
     '<div class="fld" id="subwrap">' + subChips(vals.cat, vals.sub) + '</div></div>' +
-    field('메모 (선택)', 'f-memo', 'text', cur ? cur.memo : '', 'maxlength="40" placeholder="예: 점심"') +
+    field('메모 (선택)', 'f-memo', 'text', cur ? cur.memo : '', 'maxlength="40" placeholder="예: 점심 · 투자라면 종목 이름"') +
     field('날짜', 'f-date', 'date', d0, 'max="' + t + '"') + (!cur && d0 !== t ? '<p class="fhint">마지막으로 입력한 날짜(' + md(d0) + ')로 맞춰 뒀어요.</p>' : '') +
     (showNo ? '<button type="button" class="btn ghost" data-act="noSpend">오늘은 지출 없음</button>' : '') + (cur ? delBtn('exp|' + eid) : '') + ERR;
-  openSheet(cur ? '지출 수정' : (isCorp ? '회사카드 사용 추가' : '지출 추가'), body, () => {
+  openSheet(cur ? '지출 수정' : (vals.pay === 'inv' ? '투자 추가' : isCorp ? '회사카드 사용 추가' : '지출 추가'), body, () => {
     const d = val('f-date'), amt = readMoney('f-amt');
     if (!d || d > t) return setErr('날짜를 확인해 주세요.');
     if (!(amt > 0)) return setErr('금액을 입력해 주세요.');
-    const rec = cur || { id: uid() }, c = SHEET.vals.pay === 'corp';
+    const rec = cur || { id: uid() }, pay = SHEET.vals.pay, c = pay !== 'mine';
     rec.d = d; rec.amt = amt; rec.memo = val('f-memo').trim();
-    if (c) { rec.corp = true; rec.cat = ''; delete rec.sub; }
-    else { delete rec.corp; rec.cat = SHEET.vals.cat; if (SHEET.vals.sub) rec.sub = SHEET.vals.sub; else delete rec.sub; }
+    delete rec.corp; delete rec.inv;
+    if (c) { rec[pay] = true; rec.cat = ''; delete rec.sub; }
+    else { rec.cat = SHEET.vals.cat; if (SHEET.vals.sub) rec.sub = SHEET.vals.sub; else delete rec.sub; }
     if (!cur) { S.logs.exp.push(rec); S.lastExpDate = d; }
     done();
   }, { vals: vals, focus: !cur, onPick: grp => {
     if (grp === 'cat') { SHEET.vals.sub = ''; const w = byId('subwrap'); if (w) w.innerHTML = subChips(SHEET.vals.cat, ''); }
-    if (grp === 'pay') { const w = byId('catwrap'); if (w) w.style.display = SHEET.vals.pay === 'corp' ? 'none' : 'block'; }
+    if (grp === 'pay') { const w = byId('catwrap'); if (w) w.style.display = SHEET.vals.pay !== 'mine' ? 'none' : 'block'; }
   } });
 }
 
@@ -2391,6 +2424,7 @@ const ACT = {
     if (p[0] === 'review') NAV.roff = 0;
     if (p[0] === 'cal') NAV.cal = { ym: '', sel: '' };
     if (p[0] === 'mstat') NAV.stat = '';
+    if (p[0] === 'money') NAV.lm = '';
     if (p[0] === 'settings') NAV.bm = '';
     render(true);
   },
@@ -2408,6 +2442,8 @@ const ACT = {
   logSleep(arg) { sheetSleep(arg || todayStr()); },
   logMoney() { sheetMoney(); },
   logCorp() { sheetMoney(undefined, true); },
+  logInv() { sheetMoney(undefined, 'inv'); },
+  lmMonth(arg) { NAV.lm = monthShift(NAV.lm || monthOf(0), Number(arg)); render(); },
   editCat(arg) { sheetCat(arg); },
   logFaith() { sheetFaith(); },
   check(arg) {
