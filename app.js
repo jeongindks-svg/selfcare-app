@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 13;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 14;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -66,7 +66,7 @@ function defaultState() {
         { id: 'push', name: '팔굽혀펴기', unit: '회', goal: 40, weekly: 200, cls: 'push', kind: 'strength', decimals: 0, minutes: false, goals: [] }
       ],
       sleepGoal: 7, rate: true,
-      monthly: 800000, monthBudgets: {}, cmpCats: [],
+      monthly: 800000, monthBudgets: {}, cmpCats: [], bible: null,
       cats: [
         { id: 'c1', name: '식비', monthly: 300000, subs: [] }, { id: 'c2', name: '교통', monthly: 100000, subs: [] },
         { id: 'c3', name: '카페', monthly: 80000, subs: [] }, { id: 'c4', name: '쇼핑', monthly: 100000, subs: [] },
@@ -75,11 +75,11 @@ function defaultState() {
       faith: [
         { id: 'f1', name: '말씀 읽기', on: true, track: 'read' }, { id: 'f2', name: '기도', on: true, track: 'pray' },
         { id: 'f3', name: '감사 일기', on: true, track: null }, { id: 'f4', name: '성경 암송', on: true, track: null },
-        { id: 'f5', name: '예배 참석', on: false, track: null }
+        { id: 'f5', name: '예배 참석', on: false, track: null }, { id: 'f6', name: '성경 통독', on: true, track: 'bible' }
       ],
       topics: [], fixed: []
     },
-    logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [] },
+    logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {} },
     bucket: [], wish: []
   };
 }
@@ -94,11 +94,13 @@ function normalize(o) {
   s.settings.exercises = s.settings.exercises.map(e => Object.assign({}, e, { cls: e.kind === 'strength' ? 'push' : 'run', goals: Array.isArray(e.goals) ? e.goals : [] }));
   if (!Array.isArray(s.settings.cmpCats)) s.settings.cmpCats = [];
   if (!s.settings.monthBudgets || typeof s.settings.monthBudgets !== 'object' || Array.isArray(s.settings.monthBudgets)) s.settings.monthBudgets = {};
-  s.settings.topics = s.settings.topics.map(t => ({ id: t.id, text: t.text, done: !!t.done }));
+  s.settings.topics = s.settings.topics.map(t => ({ id: t.id, text: t.text, done: !!t.done, doneAt: t.done && t.doneAt ? t.doneAt : null }));
+  if (!s.settings.faith.some(f => f.track === 'bible')) s.settings.faith.push({ id: 'f6', name: '성경 통독', on: true, track: 'bible' });
+  if (s.settings.bible && typeof s.settings.bible !== 'object') s.settings.bible = null;
   s.settings.fixed = s.settings.fixed.map(f => Object.assign({}, f, { applied: f.applied || {} }));
   s.settings.cats = s.settings.cats.map(c => ({ id: c.id, name: c.name, monthly: c.monthly != null ? c.monthly : (c.weekly || 0) * 4, subs: Array.isArray(c.subs) ? c.subs : [] }));
   s.logs = Object.assign({}, d.logs, o.logs || {});
-  ['ex', 'sleep', 'faith', 'nospend'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
+  ['ex', 'sleep', 'faith', 'nospend', 'bible'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
   ['bucket', 'wish'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
@@ -138,6 +140,7 @@ function ix() {
   S.logs.inc.forEach(r => { o.inc[r.d] = (o.inc[r.d] || 0) + r.amt; upd(r.d); });
   S.logs.notes.forEach(r => upd(r.d));
   Object.keys(S.logs.faith).forEach(upd);
+  Object.keys(S.logs.bible).forEach(upd);
   Object.keys(S.logs.nospend).forEach(upd);
   IX = o;
   return o;
@@ -149,6 +152,7 @@ const corpOn = d => (ix().corp[d] || 0) + (ix().inv[d] || 0);
 const sleepOn = d => S.logs.sleep[d] || null;
 const faithRec = d => S.logs.faith[d] || {};
 function faithDone(d, it) {
+  if (it.track === 'bible') return (S.logs.bible[d] || 0) > 0;
   const r = faithRec(d);
   if (r.done && r.done[it.id] !== undefined) return !!r.done[it.id];
   if (it.track === 'pray') return (r.pray || 0) > 0;
@@ -509,27 +513,50 @@ function monthData(ym) {
 }
 
 /* 신앙 */
-function faithStats() {
-  const days = last7(), items = faithItems();
+/* 신앙은 일요일부터 토요일까지를 한 주로 봐요 */
+function weekDaysSun(off) { const t = todayStr(), start = addDays(t, -parseD(t).getDay() - 7 * (off || 0)), a = []; for (let i = 0; i < 7; i++) a.push(addDays(start, i)); return a; }
+function faithStats(off) {
+  const t = todayStr(), days = weekDaysSun(off), items = faithItems(), el = days.filter(d => d <= t);
   const prayed = days.map(d => faithRec(d).pray || 0), read = days.map(d => faithRec(d).read || 0);
-  const counts = days.map(faithCount);
-  const total = items.length * 7;
+  const counts = days.map(d => d <= t ? faithCount(d) : 0);
+  const total = items.length * el.length;
   const any = d => faithCount(d) > 0;
-  const o = ix(), t = todayStr();
+  const o = ix();
   let cur = 0, d = any(t) ? t : addDays(t, -1);
   while (any(d)) { cur++; d = addDays(d, -1); }
   let best = 0, run = 0;
   if (o.first) {
     for (let x = o.first; x <= t; x = addDays(x, 1)) { if (any(x)) { run++; best = Math.max(best, run); } else run = 0; }
   }
-  const all = Object.keys(S.logs.faith);
+  const all = Object.keys(S.logs.faith), n = Math.max(1, el.length);
   return {
-    days, items, prayed, read, counts,
+    days, items, prayed, read, counts, elapsed: el.length,
     rate: total ? sum(counts) / total : null, doneTotal: sum(counts), total,
-    avgPray: sum(prayed) / 7, avgRead: sum(read) / 7, avgCount: sum(counts) / 7,
+    avgPray: sum(prayed) / n, avgRead: sum(read) / n, avgCount: sum(counts) / n,
     pbPray: maxOf(all.map(k => faithRec(k).pray || 0)), pbRead: maxOf(all.map(k => faithRec(k).read || 0)),
     pbCount: maxOf(all.map(faithCount)), streak: cur, bestStreak: best
   };
+}
+
+/* 성경 통독: 하루치를 읽으면 1, 이틀치를 읽으면 2를 기록해서 예상 완독일이 앞당겨져요 */
+const BIBLE_END = '2027-05-03';
+const dotDate = d => d.replace(/-/g, '.');
+function ensureBible() {
+  if (S.settings.bible) return false;
+  S.settings.bible = { end: BIBLE_END, remaining0: Math.max(1, dayDiff(BIBLE_END, todayStr()) + 1) };
+  return true;
+}
+function bibleInfo() {
+  const b = S.settings.bible;
+  if (!b) return null;
+  const t = todayStr(), log = S.logs.bible, days = Object.keys(log), got = sum(days.map(d => log[d]));
+  const left = Math.max(0, b.remaining0 - got), next = (log[t] || 0) > 0 ? addDays(t, 1) : t;
+  const exp = left > 0 ? addDays(next, left - 1) : (days.length ? days.sort().pop() : t);
+  return { b: b, got: got, left: left, exp: exp, ahead: dayDiff(b.end, exp), today: log[t] || 0, pct: b.remaining0 > 0 ? Math.min(100, got / b.remaining0 * 100) : 0 };
+}
+function setBibleEnd(end) {
+  const b = S.settings.bible, t = todayStr(), log = S.logs.bible, got = sum(Object.keys(log).map(d => log[d])), next = (log[t] || 0) > 0 ? addDays(t, 1) : t;
+  b.end = end; b.remaining0 = Math.max(1, dayDiff(end, next) + 1) + got;
 }
 
 /* ================= 분야 간 연결 (주간 리뷰) =================
@@ -694,7 +721,7 @@ function seedSample() {
   const rnd = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const ri = (lo, hi) => Math.floor(lo + rnd() * (hi - lo + 1));
   const t = todayStr();
-  const logs = { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [] };
+  const logs = { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {} };
   S.settings.exercises.forEach(e => { logs.ex[e.id] = []; });
   const cats = S.settings.cats, faith = S.settings.faith;
   if (!cats.some(c => c.subs && c.subs.length)) {
@@ -859,7 +886,7 @@ function paceChart(items) {
 }
 
 /* ================= 화면 ================= */
-let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '' };
+let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', fw: 0 };
 const ROUTE_TITLE = { today: '오늘', cats: '분야', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
@@ -984,7 +1011,7 @@ function viewCats() {
   }
   if (st.show.faith) {
     const f = faithStats();
-    rows += hubRow('faith', 'faith', 'faith', '신앙', f.rate == null ? '설정에서 항목을 켜 주세요' : '7일 실천률 ' + Math.round(f.rate * 100) + '% · 연속 ' + f.streak + '일');
+    rows += hubRow('faith', 'faith', 'faith', '신앙', f.rate == null ? '설정에서 항목을 켜 주세요' : '이번 주 실천률 ' + Math.round(f.rate * 100) + '% · 연속 ' + f.streak + '일');
   }
   if (st.show.bucket) { const b = bucketStats(); lrows += hubRow('bucket', 'flag', 'bucket', '버킷리스트', b.total ? '이룬 ' + b.done + ' / ' + b.total : '하고 싶은 일을 적어 보세요'); }
   if (st.show.wish) { const w = wishStats(); lrows += hubRow('wish', 'gift', 'wish', '위시리스트', w.total ? (w.open ? w.open + '개 · 합계 ' + won(w.sum) : '모두 구입했어요') : '갖고 싶은 것을 적어 보세요'); }
@@ -1438,30 +1465,29 @@ function expRow(x) {
 }
 const catName = id => { const c = S.settings.cats.find(x => x.id === id); return c ? c.name : '기타'; };
 const subName = (cid, sid) => { const c = S.settings.cats.find(x => x.id === cid); const s = c && c.subs.find(x => x.id === sid); return s ? s.name : ''; };
+/* 카테고리 한 칸: 도넛 링 + 쓴 돈/예산/남은 돈을 한눈에 */
+function catTile(c) {
+  const sp = catSpentMonth(c.id), cb = budgetCat(c), p = cb > 0 ? sp / cb * 100 : (sp > 0 ? 100 : 0), rest = cb - sp;
+  const has = c.subs.length > 0, open = !!NAV.open[c.id], R = 24, C = 2 * Math.PI * R, over = p >= 100;
+  const ring = '<svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="' + R + '" fill="none" stroke="var(--track)" stroke-width="7"/><circle cx="30" cy="30" r="' + R + '" fill="none" stroke="' + (over ? 'var(--bad)' : p >= 90 ? 'var(--amber)' : 'var(--c)') + '" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (Math.min(100, p) / 100 * C).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 30 30)"/><text x="30" y="34" text-anchor="middle" class="rt">' + Math.round(p) + '%</text></svg>';
+  const body = ring + '<span class="cti"><span class="ctn">' + esc(c.name) + (has ? '<span class="cex' + (open ? ' o' : '') + '">' + CHEV + '</span>' : '') + '</span><span class="ctv">' + won(sp) + '</span><span class="cts">/ ' + won(cb) + '</span><span class="cts ' + (rest < 0 ? 'neg' : 'okc') + '">' + (rest >= 0 ? '남음 ' + won(rest) : '초과 ' + won(-rest)) + '</span></span>';
+  let h = '<div class="ctile' + (over ? ' over' : '') + (open ? ' open' : '') + '">' + (has ? '<button type="button" class="ctb" data-act="toggleCat" data-arg="' + c.id + '" aria-expanded="' + open + '">' + body + '</button>' : '<div class="ctb">' + body + '</div>');
+  if (has && open) { const un = subSpentMonth(c.id, ''); h += '<div class="subs">' + c.subs.map(x => '<div class="sr"><span>' + esc(x.name) + '</span><b>' + won(subSpentMonth(c.id, x.id)) + '</b></div>').join('') + (un > 0 ? '<div class="sr"><span>미분류</span><b>' + won(un) + '</b></div>' : '') + '</div>'; }
+  return h + '</div>';
+}
 function viewMoney() {
   const st = S.settings, cur = monthOf(0), D = monthData(cur), P = monthData(monthShift(cur, -1)), now = new Date();
   const budget = budgetTotal(cur), pct = budget > 0 ? D.spent / budget * 100 : 0, left = budget - D.spent;
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
   const rest = D.income - D.spent - D.invSum;
-  let h = backHdr('가계부', 'money', 'money', editLink('money')) + '<!--cols-->';
+  let h = backHdr('가계부', 'money', 'money', editLink('money'));
   h += '<div class="btnpair"><button type="button" class="btn c-money" data-act="logMoney" data-arg="">지출 추가</button><button type="button" class="btn ghost c-money" data-act="logIncome" data-arg="">수입 추가</button></div>';
   h += '<section class="card c-money" aria-label="이번 달"><div class="bigrow"><div class="a1">' + ymNow() + ' 지출</div><div class="sm nm">' + (left >= 0 ? '남은 예산 ' + won(left) : '예산 초과 ' + won(-left)) + '</div></div>' +
     '<div class="big">' + won(D.spent) + '<span class="u">/ ' + won(budget) + '</span></div><div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
     '<div class="sm cap">' + (left > 0 ? '남은 ' + daysLeft + '일 동안 하루 ' + won(Math.floor(left / daysLeft)) + '까지 쓸 수 있어요' : '이번 달 예산을 다 썼어요') + (P.spent > 0 ? ' · 지난달 전체 ' + won(P.spent) : '') + '</div>' +
     '<div class="kv3"><div><div class="gl1">수입</div><div class="gl2 inc">' + (D.income > 0 ? won(D.income) : dash) + '</div></div><div><div class="gl1">투자</div><div class="gl2">' + (D.invSum > 0 ? won(D.invSum) : dash) + '</div></div><div><div class="gl1">최종 남는 돈</div><div class="gl2 ' + (rest >= 0 ? 'inc' : 'neg') + '">' + (D.income > 0 ? swon(rest) : dash) + '</div></div></div></section>';
   h += '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">월별 통계·비교</span><span class="l2r">수입·지출·투자 한눈에</span>' + CHEV + '</a>';
-  h += '<!--col--><section class="card list c-money" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + ymNow() + ' 예산</div>' + editLink('money') + '</div>' + (st.cats.length ? st.cats.map(c => {
-    const sp = catSpentMonth(c.id), cb = budgetCat(c), p = cb > 0 ? Math.round(sp / cb * 100) : (sp > 0 ? 100 : 0);
-    const has = c.subs.length > 0, open = !!NAV.open[c.id];
-    const head = '<span class="cn">' + esc(c.name) + (has ? '<span class="cex' + (open ? ' o' : '') + '">' + CHEV + '</span>' : '') + '</span><span class="cv"><b>' + won(sp) + '</b> / ' + won(cb) + '</span>';
-    let r2 = '<div class="catrow">' + (has ? '<button type="button" class="cr1 asbtn" data-act="toggleCat" data-arg="' + c.id + '" aria-expanded="' + open + '">' + head + '</button>' : '<div class="cr1">' + head + '</div>') +
-      '<div class="track' + (p >= 90 ? ' hot' : '') + '"><div style="width:' + Math.min(100, p) + '%"></div></div>';
-    if (has && open) {
-      const un = subSpentMonth(c.id, '');
-      r2 += '<div class="subs">' + c.subs.map(s => '<div class="sr"><span>' + esc(s.name) + '</span><b>' + won(subSpentMonth(c.id, s.id)) + '</b></div>').join('') + (un > 0 ? '<div class="sr"><span>미분류</span><b>' + won(un) + '</b></div>' : '') + '</div>';
-    }
-    return r2 + '</div>';
-  }).join('') : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section>';
+  h += '<section class="card c-money" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + ymNow() + ' 예산</div>' + editLink('money') + '</div>' + (st.cats.length ? '<div class="ctiles">' + st.cats.map(catTile).join('') + '</div>' : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section><!--cols-->';
   const curM = monthOf(0), lm = NAV.lm && NAV.lm <= curM ? NAV.lm : curM;
   const mdD = monthData(lm), items = mdD.exp.concat(mdD.corp, mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
   let rows = '', lastD = null;
@@ -1471,6 +1497,7 @@ function viewMoney() {
   });
   h += '<section><div class="sh"><h2>내역</h2></div>' + monthNav(ymLabel(lm), 'lmMonth', lm < curM) + '</section>' +
     '<section class="group"><div class="gh">' + (+lm.slice(5)) + '월 지출 ' + won(mdD.spent) + (mdD.income > 0 ? ' · 수입 ' + won(mdD.income) : '') + ' <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">이 달 내역이 없어요.</div>') + '</section>';
+  h += '<!--col-->';
   const invAll = S.logs.exp.filter(x => x.inv).sort(byDateDesc), invMonth = sum(invAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
   h += '<section class="group c-faith"><div class="gh">투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + ymNow() + ' 투자</div><div class="gl2">' + won(invMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
@@ -1491,38 +1518,49 @@ function viewMoney() {
 /* ---------- 신앙 ---------- */
 const NOTE_TYPES = ['묵상', '감사', '기도'];
 function viewFaith() {
-  const st = S.settings, r = NAV.range, info = RANGE[r], f = faithStats();
-  const bs = buckets(r, d => faithRec(d).pray || 0, 'sum');
-  const avg = bucketAvg(bs) || 0;
+  const st = S.settings, off = NAV.fw || 0, f = faithStats(off), t = todayStr(), bi = bibleInfo();
   let h = backHdr('신앙', 'faith', 'faith', editLink('faith')) + '<!--cols-->';
   const grid = f.items.map(it => {
-    const cells = f.days.map(d => '<span class="fc' + (faithDone(d, it) ? ' on' : '') + '"></span>').join('');
-    const n = f.days.filter(d => faithDone(d, it)).length;
-    return '<div class="frow" role="img" aria-label="' + esc(it.name) + ': 7일 중 ' + n + '일 실천"><span class="fn">' + esc(it.name) + '</span>' + cells + '</div>';
+    const cells = f.days.map(d => '<button type="button" class="fcb" data-act="faithCell" data-arg="' + it.id + '|' + d + '"' + (d > t ? ' disabled' : '') + ' aria-pressed="' + faithDone(d, it) + '" aria-label="' + esc(it.name) + ' ' + md(d) + (faithDone(d, it) ? ' 완료' : '') + '"><span class="fc' + (faithDone(d, it) ? ' on' : '') + (d > t ? ' fut' : '') + '"></span></button>').join('');
+    const n = f.days.filter(d => d <= t && faithDone(d, it)).length;
+    return '<div class="frow" aria-label="' + esc(it.name) + ': 이번 주 ' + n + '일 실천"><span class="fn">' + esc(it.name) + '</span>' + cells + '</div>';
   }).join('');
-  h += '<section class="card c-faith" aria-label="7일 실천 기록"><div class="ml">7일 실천률</div><div class="bigrow"><div class="big">' + (f.rate == null ? dash : Math.round(f.rate * 100) + '%') + '</div><div class="sm nm">' + f.doneTotal + ' / ' + f.total + ' 완료 · 연속 ' + f.streak + '일</div></div>' +
-    '<div class="fhead"><span></span>' + f.days.map(d => '<span>' + WD[parseD(d).getDay()] + '</span>').join('') + '</div>' + (grid || '<div class="emptyin">설정에서 신앙 항목을 켜 주세요.</div>') + '</section>';
+  const wl = off === 0 ? '이번 주' : off === 1 ? '지난주' : off + '주 전';
+  h += '<section class="card c-faith" aria-label="주간 실천 기록"><div class="bigrow"><div><div class="ml">' + wl + ' 실천률 · 일~토</div><div class="big">' + (f.rate == null ? dash : Math.round(f.rate * 100) + '%') + '</div></div>' +
+    '<div class="fwn"><button type="button" data-act="fweek" data-arg="1" aria-label="이전 주">' + '<svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1L2 8l6 7"/></svg></button><button type="button" data-act="fweek" data-arg="-1" aria-label="다음 주"' + (off === 0 ? ' disabled' : '') + '><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 1l6 7-6 7"/></svg></button></div></div>' +
+    '<div class="sm">' + f.doneTotal + ' / ' + f.total + ' 완료 · 연속 ' + f.streak + '일 · 칸을 눌러 바로 체크해요</div>' +
+    '<div class="fhead"><span></span>' + f.days.map(d => '<span' + (d === t ? ' class="tod"' : '') + '>' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</span>').join('') + '</div>' + (grid || '<div class="emptyin">설정에서 신앙 항목을 켜 주세요.</div>') + '</section>';
   const checks = f.items.map(it => {
-    const rec = faithRec(todayStr());
-    return { key: 'faith:' + it.id, cls: 'faith', title: it.name, sub: it.track === 'pray' && rec.pray ? rec.pray + '분' : it.track === 'read' && rec.read ? rec.read + '장' : '', done: faithDone(todayStr(), it) };
+    const rec = faithRec(t);
+    return { key: 'faith:' + it.id, cls: 'faith', title: it.name, sub: it.track === 'pray' && rec.pray ? rec.pray + '분' : it.track === 'read' && rec.read ? rec.read + '장' : it.track === 'bible' && S.logs.bible[t] ? S.logs.bible[t] + '일치 읽음' : '', done: faithDone(t, it) };
   });
   h += '<section><div class="sh"><h2>오늘</h2><div class="shr"><span>' + checks.filter(c => c.done).length + ' / ' + checks.length + ' 완료</span></div></div><div class="group">' +
     (checks.length ? checks.map(checkRow).join('') : '<div class="emptyrow">표시할 항목이 없어요.</div>') + '</div></section>';
+  if (bi) {
+    const st2 = bi.left === 0 ? '완독했어요' : bi.ahead > 0 ? '계획보다 ' + bi.ahead + '일 빨라요' : bi.ahead < 0 ? '계획보다 ' + (-bi.ahead) + '일 늦어요' : '계획대로 가고 있어요';
+    h += '<section class="card c-faith" aria-label="성경 통독"><div class="sh2"><div class="a1b">성경 통독</div><a href="#" class="lnk" data-act="editBible">수정</a></div>' +
+      '<div class="ml">예상 완독일</div><div class="big' + (bi.ahead > 0 ? ' inc' : bi.ahead < 0 ? ' neg' : '') + '">' + dotDate(bi.exp) + '</div>' +
+      '<div class="sm">' + st2 + ' · 계획 ' + dotDate(bi.b.end) + '</div><div class="track"><div style="width:' + bi.pct.toFixed(1) + '%"></div></div>' +
+      '<div class="gl"><span>읽은 ' + bi.got + '일치</span><span>남은 ' + bi.left + '일치</span></div>' +
+      '<div class="bibrow"><button type="button" class="sbt" data-act="bibleAdd" data-arg="-1" aria-label="하루치 취소">' + ico('minus', 16, 2.4) + '</button><div class="bibn"><div class="gl1">오늘 읽은 분량</div><div class="gl2">' + bi.today + '일치</div></div><button type="button" class="sbt" data-act="bibleAdd" data-arg="1" aria-label="하루치 더 읽음">' + ico('plus', 16, 2.4) + '</button></div>' +
+      '<div class="sm cap">하루치를 읽으면 +1, 이틀치를 읽으면 +2로 기록하면 예상 완독일이 하루씩 앞당겨져요.</div></section>';
+  }
   h += bigBtn('logFaith', '', 'faith', '기도·말씀 기록');
   const notes = S.logs.notes.slice().sort(byDateDesc).slice(0, 5);
   h += '<section class="group c-faith"><div class="gh">신앙 메모 <span class="hint">눌러서 수정</span></div>' + (notes.length ? notes.map(n =>
     '<button type="button" class="nrow" data-act="editEntry" data-arg="note|' + n.id + '"><span class="ntag">' + esc(n.type) + '</span><span class="ntext">' + esc(n.text) + '</span><span class="ndate">' + md(n.d) + '</span></button>').join('') : '<div class="emptyrow">묵상이나 감사한 일을 한두 줄 남겨 보세요.</div>') +
     '<button type="button" class="addrow" data-act="addNote">' + ico('plus', 18, 2) + '메모 추가</button></section>';
   h += '<!--col-->';
-  const topics = st.topics.slice().sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
-  h += '<section class="group c-faith"><div class="gh">기도 제목 <span class="hint">눌러서 수정 · 응답받으면 표시해요</span></div>' + (topics.length ? topics.map(t =>
-    '<button type="button" class="trow2b" data-act="editEntry" data-arg="topic|' + t.id + '"><span class="tmark">' + (t.done ? DONE_SVG : TODO_SVG) + '</span><span class="tt' + (t.done ? ' dn' : '') + '">' + esc(t.text) + '</span>' + (t.done ? '<span class="tstat">응답받음</span>' : '') + '</button>').join('') : '<div class="emptyrow">기도 제목을 추가해 보세요.</div>') +
+  const recent = x => x.done && x.doneAt && dayDiff(t, x.doneAt) <= 1;
+  const topics = st.topics.filter(x => !x.done || recent(x)).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
+  const answered = st.topics.filter(x => x.done && !recent(x)).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
+  const openA = !!NAV.open.answered;
+  h += '<section class="group c-faith"><div class="gh">기도 제목 <span class="hint">눌러서 수정 · 응답받으면 하루 동안 보여요</span></div>' + (topics.length ? topics.map(x =>
+    '<button type="button" class="trow2b" data-act="editEntry" data-arg="topic|' + x.id + '"><span class="tmark">' + (x.done ? DONE_SVG : TODO_SVG) + '</span><span class="tt' + (x.done ? ' dn' : '') + '">' + esc(x.text) + '</span>' + (x.done ? '<span class="tstat">응답받음</span>' : '') + '</button>').join('') : '<div class="emptyrow">기도 제목을 추가해 보세요.</div>') +
     '<button type="button" class="addrow" data-act="addTopic">' + ico('plus', 18, 2) + '기도 제목 추가</button></section>';
-  h += '<h2 class="gl2">기도 시간</h2>' + segCtl();
-  h += '<section class="card c-faith"><div class="ml">기도 시간 · ' + info.avgLabel + '</div><div class="big">' + fmtN(avg, 0) + '<span class="u">분 ' + info.per + '</span></div><div class="sm">이번 기간 최고 ' + maxOf(bs.map(b => b.value || 0)) + '분 · 점선은 평균</div>' +
-    barChart({ items: bs, cls: 'faith', avg: avg, fmt: v => fmtN(v, 0) }) + '</section>';
+  h += '<section class="group c-faith"><button type="button" class="drow2" data-act="toggleAns" aria-expanded="' + openA + '"><span>응답받은 기도 · 누적</span><span class="ansn">' + answered.length + '개 <span class="cex' + (openA ? ' o' : '') + '">' + CHEV + '</span></span></button>' +
+    (openA ? (answered.length ? answered.map(x => '<button type="button" class="trow2b" data-act="editEntry" data-arg="topic|' + x.id + '"><span class="tmark">' + DONE_SVG + '</span><span class="tt dn">' + esc(x.text) + '</span><span class="tstat">' + (x.doneAt ? md(x.doneAt) : '') + '</span></button>').join('') : '<div class="emptyrow">아직 응답받은 기도가 없어요.</div>') : '') + '</section>';
   h += statTable('이번 주 평균', '개인 최고', [
-    ['기도 시간', Math.round(f.avgPray) + '분', f.pbPray + '분'],
     ['말씀 읽기', f.avgRead.toFixed(1) + '장 / 일', f.pbRead + '장'],
     ['하루 실천 항목', f.avgCount.toFixed(1) + '개', f.pbCount + '개'],
     ['연속 실천 (현재)', f.streak + '일', f.bestStreak + '일']
@@ -1904,12 +1942,27 @@ function sheetTopic(tid) {
     const text = val('f-text').trim();
     if (!text) return setErr('내용을 입력해 주세요.');
     const rec = cur || { id: 't' + uid() };
+    const was = !!rec.done;
     rec.text = text; rec.done = SHEET.vals.status === 'done';
+    rec.doneAt = rec.done ? (was && rec.doneAt ? rec.doneAt : todayStr()) : null;
     if (!cur) S.settings.topics.push(rec);
     done();
   }, { vals: vals, focus: !cur });
 }
 
+/* ---- 성경 통독 ---- */
+function sheetBible() {
+  const bi = bibleInfo();
+  if (!bi) return;
+  const body = field('계획한 완독일', 'f-end', 'date', bi.b.end, 'min="' + todayStr() + '"') +
+    '<p class="fhint">완독일을 바꾸면 남은 분량(하루치씩)이 이 날짜에 맞춰 다시 계산돼요. 읽은 기록은 그대로 남아요.</p>' + ERR;
+  openSheet('성경 통독 수정', body, () => {
+    const end = val('f-end');
+    if (!end || end < todayStr()) return setErr('오늘 이후 날짜를 입력해 주세요.');
+    setBibleEnd(end);
+    done();
+  }, { focus: false });
+}
 /* ---- 설정에서 쓰는 추가 창 ---- */
 function sheetAddEx() {
   const vals = { unit: 'km', kind: 'cardio' };
@@ -2292,6 +2345,8 @@ function mergeStates(a, b) {
   out.settings.exercises.forEach(e => { const o = O.settings.exercises.find(x => x.id === e.id); if (o) unionById(e.goals, o.goals); });
   Object.keys(O.logs.ex).forEach(id => { out.logs.ex[id] = out.logs.ex[id] || []; unionById(out.logs.ex[id], O.logs.ex[id]); });
   ['exp', 'inc', 'notes'].forEach(k => unionById(out.logs[k], O.logs[k]));
+  Object.keys(O.logs.bible).forEach(d => { out.logs.bible[d] = Math.max(out.logs.bible[d] || 0, O.logs.bible[d]); });
+  if (!out.settings.bible && O.settings.bible) out.settings.bible = O.settings.bible;
   ['sleep', 'nospend'].forEach(k => Object.keys(O.logs[k]).forEach(d => { if (!(d in out.logs[k])) out.logs[k][d] = O.logs[k][d]; }));
   Object.keys(O.logs.faith).forEach(d => {
     const n = out.logs.faith[d], o = O.logs.faith[d];
@@ -2410,6 +2465,7 @@ const ACT = {
     if (p[0] === 'cal') NAV.cal = { ym: '', sel: '' };
     if (p[0] === 'mstat') NAV.stat = '';
     if (p[0] === 'money') NAV.lm = '';
+    if (p[0] === 'faith') NAV.fw = 0;
     if (p[0] === 'settings') NAV.bm = '';
     render(true);
   },
@@ -2426,6 +2482,17 @@ const ACT = {
   logEx(arg) { sheetLogEx(arg); },
   logSleep(arg) { sheetSleep(arg || todayStr()); },
   logMoney() { sheetMoney(); },
+  faithCell(arg) {
+    const p = arg.split('|'), it = S.settings.faith.find(f => f.id === p[0]), d = p[1];
+    if (!it || !d || d > todayStr()) return;
+    if (it.track === 'bible') { if ((S.logs.bible[d] || 0) > 0) delete S.logs.bible[d]; else S.logs.bible[d] = 1; }
+    else { const r = S.logs.faith[d] = S.logs.faith[d] || {}; r.done = r.done || {}; r.done[it.id] = !faithDone(d, it); }
+    commit(); render();
+  },
+  fweek(arg) { NAV.fw = Math.max(0, (NAV.fw || 0) + Number(arg)); render(); },
+  bibleAdd(arg) { const t = todayStr(), n = Math.max(0, (S.logs.bible[t] || 0) + Number(arg)); if (n) S.logs.bible[t] = n; else delete S.logs.bible[t]; commit(); render(); },
+  editBible() { sheetBible(); },
+  toggleAns() { NAV.open.answered = !NAV.open.answered; render(); },
   logCorp() { sheetMoney(undefined, true); },
   logInv() { sheetMoney(undefined, 'inv'); },
   cmpCat(arg) { const st = S.settings, cur = st.cmpCats.length ? st.cmpCats.slice() : Object.keys(monthData(NAV.stat || monthOf(0)).byCat).filter(id => id !== '__etc').sort((a, b) => monthData(NAV.stat || monthOf(0)).byCat[b] - monthData(NAV.stat || monthOf(0)).byCat[a]).slice(0, 2), i = cur.indexOf(arg); if (i >= 0) cur.splice(i, 1); else cur.push(arg); st.cmpCats = cur; commit(); render(); },
@@ -2438,12 +2505,7 @@ const ACT = {
     else if (p[0] === 'sleep') sheetSleep(t);
     else if (p[0] === 'money') sheetMoney();
     else if (p[0] === 'faith') {
-      const it = S.settings.faith.find(f => f.id === p[1]);
-      if (!it) return;
-      const r = S.logs.faith[t] = S.logs.faith[t] || {};
-      r.done = r.done || {};
-      r.done[it.id] = !faithDone(t, it);
-      commit(); render();
+      ACT.faithCell(p[1] + '|' + t);
     }
   },
   score(arg) {
@@ -2683,8 +2745,8 @@ function renderSide() {
 }
 function render(top) {
   LAYOUT = applyLayout();
-  const fixedChanged = applyFixed(), got = applyBucketLinks();
-  if (fixedChanged || got.length) commit();
+  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible();
+  if (fixedChanged || got.length || bib) commit();
   if (got.length) toast('버킷리스트를 이뤘어요: ' + got[0]);
   const v = byId('view');
   let html;
