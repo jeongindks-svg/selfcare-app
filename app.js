@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 14;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 15;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -67,6 +67,7 @@ function defaultState() {
       ],
       sleepGoal: 7, rate: true,
       monthly: 800000, monthBudgets: {}, cmpCats: [], bible: null,
+      wheel: [{ id: 'w1', name: '말씀', on: true }, { id: 'w2', name: '기도', on: true }, { id: 'w3', name: '교제', on: true }, { id: 'w4', name: '증거', on: true }],
       cats: [
         { id: 'c1', name: '식비', monthly: 300000, subs: [] }, { id: 'c2', name: '교통', monthly: 100000, subs: [] },
         { id: 'c3', name: '카페', monthly: 80000, subs: [] }, { id: 'c4', name: '쇼핑', monthly: 100000, subs: [] },
@@ -79,7 +80,7 @@ function defaultState() {
       ],
       topics: [], fixed: []
     },
-    logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {} },
+    logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {}, wheel: {} },
     bucket: [], wish: []
   };
 }
@@ -93,6 +94,7 @@ function normalize(o) {
   ['exercises', 'cats', 'faith', 'topics', 'fixed'].forEach(k => { if (!Array.isArray(s.settings[k])) s.settings[k] = d.settings[k]; });
   s.settings.exercises = s.settings.exercises.map(e => Object.assign({}, e, { cls: e.kind === 'strength' ? 'push' : 'run', goals: Array.isArray(e.goals) ? e.goals : [] }));
   if (!Array.isArray(s.settings.cmpCats)) s.settings.cmpCats = [];
+  if (!Array.isArray(s.settings.wheel)) s.settings.wheel = d.settings.wheel;
   if (!s.settings.monthBudgets || typeof s.settings.monthBudgets !== 'object' || Array.isArray(s.settings.monthBudgets)) s.settings.monthBudgets = {};
   s.settings.topics = s.settings.topics.map(t => ({ id: t.id, text: t.text, done: !!t.done, doneAt: t.done && t.doneAt ? t.doneAt : null }));
   if (!s.settings.faith.some(f => f.track === 'bible')) s.settings.faith.push({ id: 'f6', name: '성경 통독', on: true, track: 'bible' });
@@ -100,7 +102,7 @@ function normalize(o) {
   s.settings.fixed = s.settings.fixed.map(f => Object.assign({}, f, { applied: f.applied || {} }));
   s.settings.cats = s.settings.cats.map(c => ({ id: c.id, name: c.name, monthly: c.monthly != null ? c.monthly : (c.weekly || 0) * 4, subs: Array.isArray(c.subs) ? c.subs : [] }));
   s.logs = Object.assign({}, d.logs, o.logs || {});
-  ['ex', 'sleep', 'faith', 'nospend', 'bible'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
+  ['ex', 'sleep', 'faith', 'nospend', 'bible', 'wheel'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
   ['bucket', 'wish'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
@@ -141,6 +143,7 @@ function ix() {
   S.logs.notes.forEach(r => upd(r.d));
   Object.keys(S.logs.faith).forEach(upd);
   Object.keys(S.logs.bible).forEach(upd);
+  Object.keys(S.logs.wheel).forEach(upd);
   Object.keys(S.logs.nospend).forEach(upd);
   IX = o;
   return o;
@@ -538,6 +541,28 @@ function faithStats(off) {
   };
 }
 
+/* 수레바퀴의 삶: 오늘 체크리스트와 따로 기록하는 한 주(일~토) 실천표 */
+const wheelItems = () => S.settings.wheel.filter(w => w.on);
+const wheelDone = (d, id) => !!(S.logs.wheel[d] && S.logs.wheel[d][id]);
+function wheelStats(off) {
+  const t = todayStr(), days = weekDaysSun(off), items = wheelItems(), el = days.filter(d => d <= t);
+  const done = sum(el.map(d => items.filter(w => wheelDone(d, w.id)).length)), total = items.length * el.length;
+  return { days: days, items: items, done: done, total: total, rate: total ? done / total : null };
+}
+function resetFaithData() {
+  S.logs.faith = {}; S.logs.bible = {}; S.logs.wheel = {}; S.logs.notes = [];
+  S.settings.topics = []; S.settings.bible = null;
+  commit();
+}
+const FAITH_ASK_KEY = 'selfapp.faithResetAsked';
+function maybeAskFaithReset() {
+  let asked = false;
+  try { asked = !!localStorage.getItem(FAITH_ASK_KEY); localStorage.setItem(FAITH_ASK_KEY, '1'); } catch (e) { /* 저장소를 못 쓰면 한 번만 물어봐요 */ }
+  const has = Object.keys(S.logs.faith).length || Object.keys(S.logs.bible).length || Object.keys(S.logs.wheel).length || S.logs.notes.length || S.settings.topics.length;
+  if (asked || !has) return;
+  confirmSheet('신앙 기록을 새로 시작할까요?', '지금 들어 있는 신앙 기록(체크, 메모, 기도 제목, 성경 통독 기록)이 모두 지워지고 처음부터 시작해요. 항목 이름과 설정은 그대로예요. 나중에 설정 → 신앙에서도 할 수 있어요.', '초기화', () => { resetFaithData(); closeSheet(); toast('신앙 기록을 초기화했어요'); render(true); });
+}
+
 /* 성경 통독: 하루치를 읽으면 1, 이틀치를 읽으면 2를 기록해서 예상 완독일이 앞당겨져요 */
 const BIBLE_END = '2027-05-03';
 const dotDate = d => d.replace(/-/g, '.');
@@ -721,7 +746,7 @@ function seedSample() {
   const rnd = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const ri = (lo, hi) => Math.floor(lo + rnd() * (hi - lo + 1));
   const t = todayStr();
-  const logs = { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {} };
+  const logs = { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {}, wheel: {} };
   S.settings.exercises.forEach(e => { logs.ex[e.id] = []; });
   const cats = S.settings.cats, faith = S.settings.faith;
   if (!cats.some(c => c.subs && c.subs.length)) {
@@ -1011,7 +1036,7 @@ function viewCats() {
   }
   if (st.show.faith) {
     const f = faithStats();
-    rows += hubRow('faith', 'faith', 'faith', '신앙', f.rate == null ? '설정에서 항목을 켜 주세요' : '이번 주 실천률 ' + Math.round(f.rate * 100) + '% · 연속 ' + f.streak + '일');
+    rows += hubRow('faith', 'faith', 'faith', '신앙', wheelStats().rate == null ? '설정에서 항목을 켜 주세요' : '수레바퀴의 삶 ' + Math.round(wheelStats().rate * 100) + '% · 연속 ' + f.streak + '일');
   }
   if (st.show.bucket) { const b = bucketStats(); lrows += hubRow('bucket', 'flag', 'bucket', '버킷리스트', b.total ? '이룬 ' + b.done + ' / ' + b.total : '하고 싶은 일을 적어 보세요'); }
   if (st.show.wish) { const w = wishStats(); lrows += hubRow('wish', 'gift', 'wish', '위시리스트', w.total ? (w.open ? w.open + '개 · 합계 ' + won(w.sum) : '모두 구입했어요') : '갖고 싶은 것을 적어 보세요'); }
@@ -1518,23 +1543,24 @@ function viewMoney() {
 /* ---------- 신앙 ---------- */
 const NOTE_TYPES = ['묵상', '감사', '기도'];
 function viewFaith() {
-  const st = S.settings, off = NAV.fw || 0, f = faithStats(off), t = todayStr(), bi = bibleInfo();
+  const st = S.settings, off = NAV.fw || 0, f = faithStats(), t = todayStr(), bi = bibleInfo();
   let h = backHdr('신앙', 'faith', 'faith', editLink('faith')) + '<!--cols-->';
-  const grid = f.items.map(it => {
-    const cells = f.days.map(d => '<button type="button" class="fcb" data-act="faithCell" data-arg="' + it.id + '|' + d + '"' + (d > t ? ' disabled' : '') + ' aria-pressed="' + faithDone(d, it) + '" aria-label="' + esc(it.name) + ' ' + md(d) + (faithDone(d, it) ? ' 완료' : '') + '"><span class="fc' + (faithDone(d, it) ? ' on' : '') + (d > t ? ' fut' : '') + '"></span></button>').join('');
-    const n = f.days.filter(d => d <= t && faithDone(d, it)).length;
-    return '<div class="frow" aria-label="' + esc(it.name) + ': 이번 주 ' + n + '일 실천"><span class="fn">' + esc(it.name) + '</span>' + cells + '</div>';
+  const wst = wheelStats(off);
+  const grid = wst.items.map(w => {
+    const cells = wst.days.map(d => '<button type="button" class="fcb" data-act="wheelCell" data-arg="' + w.id + '|' + d + '"' + (d > t ? ' disabled' : '') + ' aria-pressed="' + wheelDone(d, w.id) + '" aria-label="' + esc(w.name) + ' ' + md(d) + (wheelDone(d, w.id) ? ' 완료' : '') + '"><span class="fc' + (wheelDone(d, w.id) ? ' on' : '') + (d > t ? ' fut' : '') + '"></span></button>').join('');
+    const n = wst.days.filter(d => d <= t && wheelDone(d, w.id)).length;
+    return '<div class="frow" aria-label="' + esc(w.name) + ': 이번 주 ' + n + '일 실천"><span class="fn">' + esc(w.name) + '</span>' + cells + '</div>';
   }).join('');
   const wl = off === 0 ? '이번 주' : off === 1 ? '지난주' : off + '주 전';
-  h += '<section class="card c-faith" aria-label="주간 실천 기록"><div class="bigrow"><div><div class="ml">' + wl + ' 실천률 · 일~토</div><div class="big">' + (f.rate == null ? dash : Math.round(f.rate * 100) + '%') + '</div></div>' +
+  h += '<section class="card c-faith" aria-label="수레바퀴의 삶"><div class="bigrow"><div><div class="ml">수레바퀴의 삶 · ' + wl + ' (일~토)</div><div class="big">' + (wst.rate == null ? dash : Math.round(wst.rate * 100) + '%') + '</div></div>' +
     '<div class="fwn"><button type="button" data-act="fweek" data-arg="1" aria-label="이전 주">' + '<svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1L2 8l6 7"/></svg></button><button type="button" data-act="fweek" data-arg="-1" aria-label="다음 주"' + (off === 0 ? ' disabled' : '') + '><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 1l6 7-6 7"/></svg></button></div></div>' +
-    '<div class="sm">' + f.doneTotal + ' / ' + f.total + ' 완료 · 연속 ' + f.streak + '일 · 칸을 눌러 바로 체크해요</div>' +
-    '<div class="fhead"><span></span>' + f.days.map(d => '<span' + (d === t ? ' class="tod"' : '') + '>' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</span>').join('') + '</div>' + (grid || '<div class="emptyin">설정에서 신앙 항목을 켜 주세요.</div>') + '</section>';
+    '<div class="sm">' + wst.done + ' / ' + wst.total + ' 실천 · 칸을 눌러 바로 체크해요</div>' +
+    '<div class="fhead"><span></span>' + wst.days.map(d => '<span' + (d === t ? ' class="tod"' : '') + '>' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</span>').join('') + '</div>' + (grid || '<div class="emptyin">설정 → 신앙에서 수레바퀴 항목을 추가해 주세요.</div>') + '</section>';
   const checks = f.items.map(it => {
     const rec = faithRec(t);
     return { key: 'faith:' + it.id, cls: 'faith', title: it.name, sub: it.track === 'pray' && rec.pray ? rec.pray + '분' : it.track === 'read' && rec.read ? rec.read + '장' : it.track === 'bible' && S.logs.bible[t] ? S.logs.bible[t] + '일치 읽음' : '', done: faithDone(t, it) };
   });
-  h += '<section><div class="sh"><h2>오늘</h2><div class="shr"><span>' + checks.filter(c => c.done).length + ' / ' + checks.length + ' 완료</span></div></div><div class="group">' +
+  h += '<section><div class="sh"><h2>오늘 체크리스트</h2><div class="shr"><span>' + checks.filter(c => c.done).length + ' / ' + checks.length + ' 완료</span></div></div><div class="group">' +
     (checks.length ? checks.map(checkRow).join('') : '<div class="emptyrow">표시할 항목이 없어요.</div>') + '</div></section>';
   if (bi) {
     const st2 = bi.left === 0 ? '완독했어요' : bi.ahead > 0 ? '계획보다 ' + bi.ahead + '일 빨라요' : bi.ahead < 0 ? '계획보다 ' + (-bi.ahead) + '일 늦어요' : '계획대로 가고 있어요';
@@ -1622,10 +1648,14 @@ function setMoney() {
 }
 function setFaith() {
   const st = S.settings;
-  return backHdr('신앙 설정', null, 'blue') + '<section class="group">' + st.faith.map(f =>
+  return backHdr('신앙 설정', null, 'blue') + glabel('수레바퀴의 삶 항목') + '<section class="group">' + st.wheel.map(w =>
+    '<div class="srow2"><input class="nm inl" value="' + esc(w.name) + '" aria-label="항목 이름" data-chg="renWheel" data-arg="' + w.id + '"><button type="button" role="switch" aria-checked="' + w.on + '" aria-label="' + esc(w.name) + ' 표시" class="swt' + (w.on ? ' on' : '') + '" data-act="tgWheel" data-arg="' + w.id + '"><span></span></button>' + trashBtn('delWheel', w.id, w.name) + '</div>').join('') +
+    '<button type="button" class="addrow" data-act="addWheel">' + ico('plus', 18, 2) + '항목 추가</button></section>' +
+    glabel('오늘 체크리스트 항목') + '<section class="group">' + st.faith.map(f =>
     '<div class="srow2"><input class="nm inl" value="' + esc(f.name) + '" aria-label="항목 이름" data-chg="renFaith" data-arg="' + f.id + '"><button type="button" role="switch" aria-checked="' + f.on + '" aria-label="' + esc(f.name) + ' 표시" class="swt' + (f.on ? ' on' : '') + '" data-act="tgFaith" data-arg="' + f.id + '"><span></span></button>' +
     (f.track ? '' : trashBtn('delFaith', f.id, f.name)) + '</div>').join('') +
-    '<button type="button" class="addrow" data-act="addFaith">' + ico('plus', 18, 2) + '항목 추가</button></section>';
+    '<button type="button" class="addrow" data-act="addFaith">' + ico('plus', 18, 2) + '항목 추가</button></section>' +
+    glabel('데이터') + '<section class="group"><button type="button" class="drow danger" data-act="resetFaith">신앙 기록 초기화</button></section>';
 }
 function viewSettings() {
   const st = S.settings, a = (NAV.arg || '').split(':');
@@ -2061,6 +2091,15 @@ function sheetAddSub(cid) {
     done('추가했어요');
   });
 }
+function sheetAddWheel() {
+  const body = field('항목 이름', 'f-name', 'text', '', 'maxlength="14" placeholder="예: 순종"') + ERR;
+  openSheet('수레바퀴 항목 추가', body, () => {
+    const name = val('f-name').trim();
+    if (!name) return setErr('이름을 입력해 주세요.');
+    S.settings.wheel.push({ id: 'w' + uid(), name: name, on: true });
+    done('추가했어요');
+  });
+}
 function sheetAddFaith() {
   const body = field('항목 이름', 'f-name', 'text', '', 'maxlength="14" placeholder="예: 큐티"') + ERR;
   openSheet('신앙 항목 추가', body, () => {
@@ -2345,6 +2384,9 @@ function mergeStates(a, b) {
   out.settings.exercises.forEach(e => { const o = O.settings.exercises.find(x => x.id === e.id); if (o) unionById(e.goals, o.goals); });
   Object.keys(O.logs.ex).forEach(id => { out.logs.ex[id] = out.logs.ex[id] || []; unionById(out.logs.ex[id], O.logs.ex[id]); });
   ['exp', 'inc', 'notes'].forEach(k => unionById(out.logs[k], O.logs[k]));
+  out.settings.wheel.forEach(w => { const o = O.settings.wheel.find(x => x.id === w.id); if (o) w.name = w.name || o.name; });
+  unionById(out.settings.wheel, O.settings.wheel);
+  Object.keys(O.logs.wheel).forEach(d => { out.logs.wheel[d] = Object.assign({}, O.logs.wheel[d], out.logs.wheel[d]); });
   Object.keys(O.logs.bible).forEach(d => { out.logs.bible[d] = Math.max(out.logs.bible[d] || 0, O.logs.bible[d]); });
   if (!out.settings.bible && O.settings.bible) out.settings.bible = O.settings.bible;
   ['sleep', 'nospend'].forEach(k => Object.keys(O.logs[k]).forEach(d => { if (!(d in out.logs[k])) out.logs[k][d] = O.logs[k][d]; }));
@@ -2466,6 +2508,7 @@ const ACT = {
     if (p[0] === 'mstat') NAV.stat = '';
     if (p[0] === 'money') NAV.lm = '';
     if (p[0] === 'faith') NAV.fw = 0;
+    if (p[0] === 'faith') setTimeout(maybeAskFaithReset, 250);
     if (p[0] === 'settings') NAV.bm = '';
     render(true);
   },
@@ -2489,6 +2532,18 @@ const ACT = {
     else { const r = S.logs.faith[d] = S.logs.faith[d] || {}; r.done = r.done || {}; r.done[it.id] = !faithDone(d, it); }
     commit(); render();
   },
+  wheelCell(arg) {
+    const p = arg.split('|'), d = p[1];
+    if (!S.settings.wheel.some(w => w.id === p[0]) || !d || d > todayStr()) return;
+    const r = S.logs.wheel[d] = S.logs.wheel[d] || {};
+    if (r[p[0]]) delete r[p[0]]; else r[p[0]] = true;
+    if (!Object.keys(r).length) delete S.logs.wheel[d];
+    commit(); render();
+  },
+  resetFaith() { confirmSheet('신앙 기록 초기화', '신앙 기록(체크, 수레바퀴의 삶, 메모, 기도 제목, 성경 통독 기록)이 모두 지워져요. 항목 이름과 설정은 그대로예요. 되돌릴 수 없어요.', '초기화', () => { resetFaithData(); closeSheet(); toast('신앙 기록을 초기화했어요'); render(true); }); },
+  tgWheel(arg) { const w = S.settings.wheel.find(x => x.id === arg); if (w) { w.on = !w.on; commit(); render(); } },
+  delWheel(arg) { S.settings.wheel = S.settings.wheel.filter(x => x.id !== arg); commit(); render(); },
+  addWheel() { sheetAddWheel(); },
   fweek(arg) { NAV.fw = Math.max(0, (NAV.fw || 0) + Number(arg)); render(); },
   bibleAdd(arg) { const t = todayStr(), n = Math.max(0, (S.logs.bible[t] || 0) + Number(arg)); if (n) S.logs.bible[t] = n; else delete S.logs.bible[t]; commit(); render(); },
   editBible() { sheetBible(); },
@@ -2678,6 +2733,7 @@ const CHG = {
   renCat(arg, v) { const c = S.settings.cats.find(x => x.id === arg); if (c && v.trim()) c.name = v.trim(); commit(); render(); },
   renSub(arg, v) { const p = arg.split('|'), c = S.settings.cats.find(x => x.id === p[0]); const s = c && c.subs.find(x => x.id === p[1]); if (s && v.trim()) s.name = v.trim(); commit(); render(); },
   faithDate(arg, v) { if (v) fillFaith(v); },
+  renWheel(arg, v) { const w = S.settings.wheel.find(x => x.id === arg); if (w && v.trim()) w.name = v.trim(); commit(); render(); },
   renFaith(arg, v) { const f = S.settings.faith.find(x => x.id === arg); if (f && v.trim()) f.name = v.trim(); commit(); render(); }
 };
 
