@@ -550,3 +550,14 @@ html[data-side] #toast{bottom:32px}
 .bibn{text-align:center;flex:1}
 .drow2{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:52px;padding:0 16px;border:0;background:transparent;font-size:15px;font-weight:600;color:var(--text);text-align:left}
 .ansn{display:inline-flex;align-items:center;gap:6px;color:var(--sub);font-weight:500}
+
+/* v16: 카테고리 예산은 한 줄 + 가는 막대로 */
+.ctiles{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 28px;margin-top:2px}
+.ctile{background:transparent;border-radius:0;padding:8px 0 10px;border-bottom:1px solid var(--line);box-shadow:none}
+.ctile.over{box-shadow:none}
+.ctb{justify-content:space-between;gap:8px;min-height:36px;align-items:baseline;flex-direction:row}
+.ctn{font-size:15px;font-weight:600}
+.ctv{font-size:13px;color:var(--sub);font-weight:400;letter-spacing:0}
+.ctv b{color:var(--text);font-size:15px}.ctv b.neg{color:var(--bad)}
+.ctile .track{margin-top:2px}
+.invbars{padding:0 16px 8px}

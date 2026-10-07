@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 15;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 16;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -911,7 +911,7 @@ function paceChart(items) {
 }
 
 /* ================= 화면 ================= */
-let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', fw: 0 };
+let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0 };
 const ROUTE_TITLE = { today: '오늘', cats: '분야', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
@@ -1196,6 +1196,7 @@ function calDetail(d) {
   if (st.show.exercise) st.exercises.forEach(e => (S.logs.ex[e.id] || []).filter(r => r.d === d).forEach(x =>
     rows.push(entryRow('ex|' + e.id + '|' + x.id, esc(e.name), x.m > 0 ? fmtMS(x.m) + ' · 페이스 ' + fmtPace(x.m / x.v) + ' /km' : '운동', exVal(x.v, e)))));
   const sl = st.show.sleep ? sleepOn(d) : null;
+  if (st.show.sleep && !sl && d <= todayStr()) rows.push('<button type="button" class="addrow" data-act="logSleep" data-arg="' + d + '">' + ico('plus', 18, 2) + '이 날 수면 기록 추가</button>');
   if (sl) rows.push('<button type="button" class="erow" data-act="logSleep" data-arg="' + d + '"><span class="el"><span class="e1">수면</span><span class="e2">' + esc(sl.bed) + ' → ' + esc(sl.wake) + '</span></span><span class="er">' + fmtDur(sl.dur) + (sl.score ? ' · ' + sl.score + '점' : '') + '</span>' + EDIT_IC + '</button>');
   if (st.show.money) {
     S.logs.exp.filter(x => x.d === d).forEach(x => rows.push(expRow(x)));
@@ -1474,6 +1475,7 @@ function viewSleep() {
     const prog = Math.min(100, ins.n / 14 * 100);
     h += '<hr><div class="qrow"><div class="ml">분석에 쓰인 기록</div><div class="q3">' + ins.n + '일 / 14일</div></div><div class="track"><div style="width:' + prog.toFixed(0) + '%"></div></div><div class="sm cap">14일 이상 쌓이면 추천이 더 정확해져요.</div></section>';
   }
+  h += '<button type="button" class="dashbtn" data-act="logSleepPast">' + ico('plus', 18, 2) + '이전 날짜 수면 기록 추가</button>';
   const list = sleepList().slice().reverse().slice(0, 7);
   h += '<section class="group"><div class="gh">최근 기록 <span class="hint">눌러서 수정</span></div>' + (list.length ? list.map(x =>
     '<button type="button" class="erow" data-act="logSleep" data-arg="' + x.d + '"><span class="el"><span class="e1">' + dateLabel(x.d) + '</span><span class="e2">' + esc(x.bed) + ' → ' + esc(x.wake) + '</span></span><span class="er">' + fmtDur(x.dur) + (x.score ? ' · ' + x.score + '점' : '') + '</span>' + EDIT_IC + '</button>').join('') : '<div class="emptyrow">아직 기록이 없어요.</div>') + '</section>';
@@ -1490,13 +1492,13 @@ function expRow(x) {
 }
 const catName = id => { const c = S.settings.cats.find(x => x.id === id); return c ? c.name : '기타'; };
 const subName = (cid, sid) => { const c = S.settings.cats.find(x => x.id === cid); const s = c && c.subs.find(x => x.id === sid); return s ? s.name : ''; };
-/* 카테고리 한 칸: 도넛 링 + 쓴 돈/예산/남은 돈을 한눈에 */
+/* 카테고리 한 줄: 이름 · 쓴 돈 / 예산 · 가는 막대 하나 */
 function catTile(c) {
-  const sp = catSpentMonth(c.id), cb = budgetCat(c), p = cb > 0 ? sp / cb * 100 : (sp > 0 ? 100 : 0), rest = cb - sp;
-  const has = c.subs.length > 0, open = !!NAV.open[c.id], R = 24, C = 2 * Math.PI * R, over = p >= 100;
-  const ring = '<svg class="ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="' + R + '" fill="none" stroke="var(--track)" stroke-width="7"/><circle cx="30" cy="30" r="' + R + '" fill="none" stroke="' + (over ? 'var(--bad)' : p >= 90 ? 'var(--amber)' : 'var(--c)') + '" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (Math.min(100, p) / 100 * C).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 30 30)"/><text x="30" y="34" text-anchor="middle" class="rt">' + Math.round(p) + '%</text></svg>';
-  const body = ring + '<span class="cti"><span class="ctn">' + esc(c.name) + (has ? '<span class="cex' + (open ? ' o' : '') + '">' + CHEV + '</span>' : '') + '</span><span class="ctv">' + won(sp) + '</span><span class="cts">/ ' + won(cb) + '</span><span class="cts ' + (rest < 0 ? 'neg' : 'okc') + '">' + (rest >= 0 ? '남음 ' + won(rest) : '초과 ' + won(-rest)) + '</span></span>';
-  let h = '<div class="ctile' + (over ? ' over' : '') + (open ? ' open' : '') + '">' + (has ? '<button type="button" class="ctb" data-act="toggleCat" data-arg="' + c.id + '" aria-expanded="' + open + '">' + body + '</button>' : '<div class="ctb">' + body + '</div>');
+  const sp = catSpentMonth(c.id), cb = budgetCat(c), p = cb > 0 ? sp / cb * 100 : (sp > 0 ? 100 : 0), over = cb > 0 && sp > cb;
+  const has = c.subs.length > 0, open = !!NAV.open[c.id];
+  const body = '<span class="ctn">' + esc(c.name) + (has ? '<span class="cex' + (open ? ' o' : '') + '">' + CHEV + '</span>' : '') + '</span><span class="ctv"><b' + (over ? ' class="neg"' : '') + '>' + won(sp) + '</b> / ' + won(cb) + '</span>';
+  let h = '<div class="ctile' + (over ? ' over' : '') + '">' + (has ? '<button type="button" class="ctb" data-act="toggleCat" data-arg="' + c.id + '" aria-expanded="' + open + '">' + body + '</button>' : '<div class="ctb">' + body + '</div>') +
+    '<div class="track' + (p >= 90 ? ' hot' : '') + '"><div style="width:' + Math.min(100, p).toFixed(1) + '%"></div></div>';
   if (has && open) { const un = subSpentMonth(c.id, ''); h += '<div class="subs">' + c.subs.map(x => '<div class="sr"><span>' + esc(x.name) + '</span><b>' + won(subSpentMonth(c.id, x.id)) + '</b></div>').join('') + (un > 0 ? '<div class="sr"><span>미분류</span><b>' + won(un) + '</b></div>' : '') + '</div>'; }
   return h + '</div>';
 }
@@ -1523,10 +1525,14 @@ function viewMoney() {
   h += '<section><div class="sh"><h2>내역</h2></div>' + monthNav(ymLabel(lm), 'lmMonth', lm < curM) + '</section>' +
     '<section class="group"><div class="gh">' + (+lm.slice(5)) + '월 지출 ' + won(mdD.spent) + (mdD.income > 0 ? ' · 수입 ' + won(mdD.income) : '') + ' <span class="hint">눌러서 수정</span></div>' + (rows || '<div class="emptyrow">이 달 내역이 없어요.</div>') + '</section>';
   h += '<!--col-->';
-  const invAll = S.logs.exp.filter(x => x.inv).sort(byDateDesc), invMonth = sum(invAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
-  h += '<section class="group c-faith"><div class="gh">투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
-    '<div class="corpsum"><div><div class="gl1">' + ymNow() + ' 투자</div><div class="gl2">' + won(invMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
-    invAll.slice(0, 5).map(x => entryRow('exp|' + x.id, esc(x.memo || '투자'), dateLabel(x.d), '−' + won(x.amt), 'corpamt')).join('') +
+  const imM = NAV.im && NAV.im <= cur ? NAV.im : cur, ID = monthData(imM), invAll = S.logs.exp.filter(x => x.inv);
+  const im6 = []; for (let i = 5; i >= 0; i--) im6.push(monthShift(imM, -i));
+  h += '<section><div class="sh"><h2>투자</h2></div>' + monthNav(ymLabel(imM), 'imMonth', imM < cur) + '</section>' +
+    '<section class="group c-faith"><div class="gh">' + (+imM.slice(5)) + '월 투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
+    '<div class="corpsum"><div><div class="gl1">' + (+imM.slice(5)) + '월 투자</div><div class="gl2">' + won(ID.invSum) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
+    '<div class="invbars">' + miniBars(im6.map(m => monthData(m).invSum), im6.map(m => (+m.slice(5)) + '월')) + '</div>' +
+    ID.invs.slice().sort(byDateDesc).map(x => entryRow('exp|' + x.id, esc(x.memo || '투자'), dateLabel(x.d), '−' + won(x.amt), 'corpamt')).join('') +
+    (ID.invs.length ? '' : '<div class="emptyrow">이 달 투자 내역이 없어요.</div>') +
     '<button type="button" class="addrow" data-act="logInv">' + ico('plus', 18, 2) + '투자 추가</button></section>';
   const corpAll = S.logs.exp.filter(x => x.corp).sort(byDateDesc), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === monthOf(0)).map(x => x.amt));
   h += '<section class="group c-money"><div class="gh">회사카드 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
@@ -1817,11 +1823,11 @@ function sheetLogEx(id, eid) {
 }
 
 /* ---- 수면 ---- */
-function sheetSleep(date) {
+function sheetSleep(date, carry) {
   const t = todayStr(), d0 = date || t, ex = S.logs.sleep[d0];
-  const vals = { score: ex && ex.score ? ex.score : '' };
-  const body = field('기상한 날', 'f-date', 'date', d0, 'max="' + t + '"') +
-    '<div class="two">' + field('취침 시각', 'f-bed', 'time', ex ? ex.bed : '23:30') + field('기상 시각', 'f-wake', 'time', ex ? ex.wake : '07:00') + '</div>' +
+  const vals = { score: ex && ex.score ? ex.score : (!ex && carry && carry.score ? carry.score : '') };
+  const body = '<div class="fld"><label for="f-date">기상한 날</label><input id="f-date" type="date" value="' + d0 + '" max="' + t + '" data-chg="sleepDate" data-arg=""></div>' +
+    '<div class="two">' + field('취침 시각', 'f-bed', 'time', ex ? ex.bed : (carry ? carry.bed : '23:30')) + field('기상 시각', 'f-wake', 'time', ex ? ex.wake : (carry ? carry.wake : '07:00')) + '</div>' +
     (S.settings.rate ? '<div class="fld"><label>잘 잤나요? (10점 만점)</label><div class="scoregrid" role="group">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => '<button type="button" class="cs' + (n === vals.score ? ' on' : '') + '" data-act="pickVal" data-arg="score|' + n + '" data-grp="score" aria-pressed="' + (n === vals.score) + '">' + n + '</button>').join('') + '</div></div>' : '') +
     (ex ? '<button type="button" class="btn ghost danger" data-act="delSleep" data-arg="' + d0 + '">이 기록 삭제</button>' : '') + ERR;
   openSheet(ex ? '수면 기록 수정' : '수면 기록', body, () => {
@@ -2506,7 +2512,7 @@ const ACT = {
     if (p[0] === 'review') NAV.roff = 0;
     if (p[0] === 'cal') NAV.cal = { ym: '', sel: '' };
     if (p[0] === 'mstat') NAV.stat = '';
-    if (p[0] === 'money') NAV.lm = '';
+    if (p[0] === 'money') { NAV.lm = ''; NAV.im = ''; }
     if (p[0] === 'faith') NAV.fw = 0;
     if (p[0] === 'faith') setTimeout(maybeAskFaithReset, 250);
     if (p[0] === 'settings') NAV.bm = '';
@@ -2523,6 +2529,7 @@ const ACT = {
   gpick(arg) { NAV.arg = arg; render(); },
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
   logEx(arg) { sheetLogEx(arg); },
+  logSleepPast() { const t = todayStr(); let d = addDays(t, -1); while (S.logs.sleep[d] && d > addDays(t, -60)) d = addDays(d, -1); sheetSleep(d); },
   logSleep(arg) { sheetSleep(arg || todayStr()); },
   logMoney() { sheetMoney(); },
   faithCell(arg) {
@@ -2551,6 +2558,7 @@ const ACT = {
   logCorp() { sheetMoney(undefined, true); },
   logInv() { sheetMoney(undefined, 'inv'); },
   cmpCat(arg) { const st = S.settings, cur = st.cmpCats.length ? st.cmpCats.slice() : Object.keys(monthData(NAV.stat || monthOf(0)).byCat).filter(id => id !== '__etc').sort((a, b) => monthData(NAV.stat || monthOf(0)).byCat[b] - monthData(NAV.stat || monthOf(0)).byCat[a]).slice(0, 2), i = cur.indexOf(arg); if (i >= 0) cur.splice(i, 1); else cur.push(arg); st.cmpCats = cur; commit(); render(); },
+  imMonth(arg) { NAV.im = monthShift(NAV.im || monthOf(0), Number(arg)); render(); },
   lmMonth(arg) { NAV.lm = monthShift(NAV.lm || monthOf(0), Number(arg)); render(); },
   editCat(arg) { sheetCat(arg); },
   logFaith() { sheetFaith(); },
@@ -2733,6 +2741,10 @@ const CHG = {
   renCat(arg, v) { const c = S.settings.cats.find(x => x.id === arg); if (c && v.trim()) c.name = v.trim(); commit(); render(); },
   renSub(arg, v) { const p = arg.split('|'), c = S.settings.cats.find(x => x.id === p[0]); const s = c && c.subs.find(x => x.id === p[1]); if (s && v.trim()) s.name = v.trim(); commit(); render(); },
   faithDate(arg, v) { if (v) fillFaith(v); },
+  sleepDate(arg, v) {
+    if (!v || v > todayStr() || !SHEET) return;
+    sheetSleep(v, { bed: val('f-bed') || '23:30', wake: val('f-wake') || '07:00', score: SHEET.vals.score });
+  },
   renWheel(arg, v) { const w = S.settings.wheel.find(x => x.id === arg); if (w && v.trim()) w.name = v.trim(); commit(); render(); },
   renFaith(arg, v) { const f = S.settings.faith.find(x => x.id === arg); if (f && v.trim()) f.name = v.trim(); commit(); render(); }
 };
