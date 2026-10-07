@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 16;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 17;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1334,9 +1334,9 @@ function viewEx(id) {
   h += bigBtn('logEx', e.id, e.cls, '기록 추가');
   const rows = [
     ['하루 합계', exVal(s.avg, e), exBest(s.pbDay, e)],
-    [e.unit === '회' ? '한 세트' : '1회 기록', s.avgEntry == null ? dash : exVal(s.avgEntry, e), s.pbEntry ? exVal(s.pbEntry, e) : dash],
     ['주간 합계', exVal(s.sum7, e), s.pbWeek ? exVal(s.pbWeek, e) : dash]
   ];
+  if (e.unit !== '회') rows.splice(1, 0, ['1회 기록', s.avgEntry == null ? dash : exVal(s.avgEntry, e), s.pbEntry ? exVal(s.pbEntry, e) : dash]);
   if (e.minutes) rows.splice(2, 0, ['페이스', fmtPace(s.pace7) + (s.pace7 ? ' /km' : ''), fmtPace(s.pbPace) + (s.pbPace ? ' /km' : '')]);
   h += statTable('이번 주 평균', '개인 최고', rows, e.cls) + '<!--col-->' + goalsCard(e) + bucketGoalsFor(e);
   const list = (S.logs.ex[e.id] || []).slice().sort(byDateDesc).slice(0, 8);
