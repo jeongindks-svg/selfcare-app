@@ -597,3 +597,12 @@ html[data-fs="xl"] body{zoom:1.25}
 .hdr h1{font-size:36px;letter-spacing:-.8px}
 .pcols{gap:8px}
 .pcol{background:transparent;border:1px solid var(--line);min-height:104px}
+
+/* v21 */
+.pcols{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.pcol{padding:10px 4px 8px;min-height:104px}
+.pcol .pp{font-size:26px}
+.pcol .pl{font-size:13px}.pcol .ps{font-size:12px}
+.tdskip{border:0;background:var(--track2);color:var(--text2);border-radius:10px;min-height:36px;padding:0 10px;font-size:13px;font-weight:600;flex:none}
+.todo.skipped .td1{color:var(--sub);text-decoration:none;font-style:italic}
+.lino{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;margin-right:8px;border-radius:12px;background:var(--cbg);color:var(--ct);font-size:13px;font-weight:700}
