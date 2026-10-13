@@ -574,3 +574,20 @@ html[data-fs="xl"] body{zoom:1.25}
 .prow .ptrack{flex:1;height:8px;border-radius:4px;background:var(--track2);overflow:hidden}
 .prow .ptrack span{display:block;height:8px;background:var(--c)}
 .prow .pv{min-width:54px;text-align:right;font-size:15px;color:var(--text2)}
+
+/* v19: 오늘 화면 */
+.pcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:4px}
+.pcol{display:flex;flex-direction:column;gap:4px;padding:12px 8px 10px;border:0;border-radius:16px;background:var(--track2);text-align:center;min-height:112px;justify-content:center}
+.pcol .pl{font-size:14px;font-weight:600;color:var(--text2)}
+.pcol .pp{font-size:32px;font-weight:800;letter-spacing:-1px;color:var(--ct)}
+.pcol .pp i{font-style:normal;font-size:16px;font-weight:700;margin-left:1px}
+.pcol .ptrack{display:block;height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin:2px 6px}
+.pcol .ptrack span{display:block;height:6px;background:var(--c)}
+.pcol .ps{font-size:13px;color:var(--sub)}
+.todo{display:flex;align-items:center;gap:4px;min-height:60px;border-top:1px solid var(--line);padding-right:12px}
+.tdck{width:52px;height:56px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;flex:none}
+.tdck svg.on circle{fill:var(--cb)}
+.tdt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;border:0;background:transparent;text-align:left;padding:6px 0;min-height:52px;justify-content:center}
+.td1{font-size:17px;font-weight:500}.td1.dn{color:var(--sub);text-decoration:line-through}
+.td2{font-size:13px;color:var(--sub)}
+.tdck svg.off circle{stroke:var(--sub2)}

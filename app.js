@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 18;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 19;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -81,7 +81,7 @@ function defaultState() {
       topics: [], fixed: []
     },
     logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {}, wheel: {} },
-    bucket: [], wish: [], plans: []
+    bucket: [], wish: [], plans: [], todos: []
   };
 }
 function normalize(o) {
@@ -104,7 +104,7 @@ function normalize(o) {
   s.logs = Object.assign({}, d.logs, o.logs || {});
   ['ex', 'sleep', 'faith', 'nospend', 'bible', 'wheel'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
-  ['bucket', 'wish', 'plans'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+  ['bucket', 'wish', 'plans', 'todos'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
 }
 let S = defaultState();
@@ -430,6 +430,44 @@ function planWhen(period, off) {
 }
 const plansFor = (period, pk) => S.plans.filter(x => x.period === period && x.pk === pk);
 const planDone = x => x.target > 0 ? x.cur >= x.target : !!x.done;
+function planPct(period) {
+  const l = plansFor(period, planKey(period, 0));
+  return l.length ? Math.round(100 * sum(l.map(x => x.target > 0 ? Math.min(1, x.cur / x.target) : (x.done ? 1 : 0))) / l.length) : null;
+}
+
+/* 오늘 할 일: 기록과 연결하면 체크할 때 바로 기록 창이 열리고, 기록하면 자동으로 완료돼요 */
+function todoLinkDone(l) {
+  const t = todayStr();
+  if (!l) return false;
+  if (l.k === 'ex') return exSum(l.id, t) > 0;
+  if (l.k === 'sleep') return !!sleepOn(t);
+  if (l.k === 'money') return spendOn(t) > 0 || corpOn(t) > 0 || !!S.logs.nospend[t];
+  if (l.k === 'faith') { const r = faithRec(t); return faithCount(t) > 0 || (r.pray || 0) > 0 || (r.read || 0) > 0; }
+  return false;
+}
+function todoLinkName(l) {
+  if (!l) return '';
+  if (l.k === 'ex') { const e = S.settings.exercises.find(x => x.id === l.id); return e ? e.name + ' 기록' : ''; }
+  return { sleep: '수면 기록', money: '가계부 입력', faith: '기도·말씀 기록' }[l.k] || '';
+}
+function todoDone(x) {
+  const t = todayStr();
+  if (x.link && todoLinkName(x.link)) return todoLinkDone(x.link);
+  return x.daily ? !!(x.dn && x.dn[t]) : !!x.done;
+}
+function todoVisible(x) { const t = todayStr(); return x.daily || (x.done ? x.doneAt === t : (x.d || t) <= t); }
+function syncTodos() {
+  const t = todayStr(); let ch = false;
+  S.todos.forEach(x => { if (!x.daily && !x.done && x.link && todoLinkDone(x.link)) { x.done = true; x.doneAt = t; ch = true; } });
+  const keep = S.todos.filter(x => x.daily || !x.done || !x.doneAt || dayDiff(t, x.doneAt) <= 30);
+  if (keep.length !== S.todos.length) { S.todos = keep; ch = true; }
+  return ch;
+}
+function todoRow(x) {
+  const d = todoDone(x), ln = todoLinkName(x.link), cls = x.link && x.link.k === 'ex' ? (S.settings.exercises.find(e => e.id === x.link.id) || {}).cls || 'blue' : ({ sleep: 'sleep', money: 'money', faith: 'faith' }[x.link && x.link.k] || 'blue');
+  return '<div class="todo c-' + cls + '"><button type="button" class="tdck" data-act="todoTg" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (d ? ' 완료' : ln ? ' 기록하러 가기' : ' 체크')  + '">' + (d ? DONE_SVG : TODO_SVG) + '</button>' +
+    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1' + (d ? ' dn' : '') + '">' + esc(x.title) + '</span>' + ((ln || x.daily) ? '<span class="td2">' + (ln && !d ? '체크하면 ' + esc(ln) + ' 창이 열려요' : esc(ln)) + (ln && x.daily ? ' · ' : '') + (x.daily ? '매일' : '') + '</span>' : '') + '</button></div>';
+}
 function planSummary(period) { const l = plansFor(period, planKey(period, 0)); return { n: l.length, done: l.filter(planDone).length }; }
 
 /* 버킷리스트 · 위시리스트 */
@@ -992,15 +1030,13 @@ function tile(arg, icon, name, cls, big, sub) {
 function viewToday() {
   const now = new Date(), st = S.settings, t = todayStr();
   const sub = (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일';
-  const g = growthAt(t), comp = compositeG(g), cp = compositeG(growthAt(addDays(t, -7)));
-  let top;
-  if (comp == null) {
-    top = empty('기록이 3일 이상 쌓이면<br>Growth 점수가 나와요.<br>아래 분야에서 첫 기록을 남겨 보세요.', seedBtn);
-  } else {
-    top = '<a href="#" class="card gcard" data-act="go" data-arg="growth"><div class="atop"><div class="a1">Growth · 최근 7일</div>' + CHEV + '</div>' +
-      '<div class="abig"><span class="n">' + comp + '</span><span class="d ' + deltaCls(comp, cp) + '">' + (cp == null ? '첫 점수예요' : '지난주보다 ' + delta(comp, cp)) + '</span></div>' +
-      (growthSentence(g) ? '<div class="gsum">' + growthSentence(g) + '</div>' : '') + '</a>';
-  }
+  const pcols = ['week', 'month', 'year'].map(per => { const v = planPct(per), q = planSummary(per); return '<button type="button" class="pcol" data-act="goPlan" data-arg="' + per + '"><span class="pl">' + PLAN_LABEL[per] + '</span><span class="pp">' + (v == null ? dash : v + '<i>%</i>') + '</span><span class="ptrack"><span style="width:' + (v || 0) + '%"></span></span><span class="ps">' + (q.n ? q.done + ' / ' + q.n + ' 달성' : '목표 세우기') + '</span></button>'; }).join('');
+  const top = '<section class="card c-blue" aria-label="계획 달성률"><div class="sh2"><div class="a1b">계획 달성률</div><a href="#" class="lnk" data-act="go" data-arg="goals">목표 관리</a></div><div class="pcols">' + pcols + '</div></section>';
+  const tds = S.todos.filter(todoVisible), tdn = tds.filter(todoDone).length;
+  const todoCard = '<section class="group" aria-label="오늘 할 일"><div class="gh">오늘 할 일 <span class="hint">' + (tds.length ? tdn + ' / ' + tds.length + ' 완료' : '') + '</span></div>' +
+    (tds.length ? tds.slice().sort((a, b) => (todoDone(a) ? 1 : 0) - (todoDone(b) ? 1 : 0)).map(todoRow).join('') : '<div class="emptyrow">오늘 할 일을 적어 보세요. 러닝처럼 기록과 연결하면 체크할 때 바로 기록할 수 있어요.</div>') +
+    '<button type="button" class="addrow" data-act="addTodo">' + ico('plus', 18, 2) + '할 일 추가</button>' +
+    (S.todos.length ? '' : '<button type="button" class="addrow" data-act="todoSeed">추천 할 일 한 번에 넣기 (매일 반복)</button>') + '</section>';
   const tiles = [];
   if (st.show.exercise && st.exercises.length) {
     const logged = st.exercises.filter(e => exSum(e.id, t) > 0);
@@ -1028,10 +1064,8 @@ function viewToday() {
   const gl = [];
   if (st.show.exercise) st.exercises.forEach(e => e.goals.forEach(g => gl.push(goalRow(e, g, true))));
   const goalsToday = gl.length ? '<section class="card"><div class="sh2"><div class="a1b">운동 목표</div><a href="#" class="lnk" data-act="go" data-arg="exlist">운동</a></div>' + gl.join('') + '</section>' : '';
-  const pl = ['week', 'month', 'year'].map(per => { const q = planSummary(per); return '<button type="button" class="prow" data-act="goPlan" data-arg="' + per + '"><span class="pn">' + PLAN_LABEL[per] + '</span><span class="ptrack"><span style="width:' + (q.n ? 100 * q.done / q.n : 0).toFixed(0) + '%"></span></span><span class="pv">' + (q.n ? q.done + ' / ' + q.n : '없음') + '</span></button>'; }).join('');
-  const planCard = '<section class="card c-blue"><div class="sh2"><div class="a1b">목표</div><a href="#" class="lnk" data-act="go" data-arg="goals">관리</a></div>' + pl + '</section>';
-  return hdr('오늘', sub) + '<!--cols-->' + top + planCard + goalsToday + '<!--col-->' +
-    (tiles.length ? '<section><div class="sh"><h2>분야</h2><a href="#" class="lnk" data-act="go" data-arg="cats">모두 보기</a></div><div class="tiles">' + tiles.join('') + '</div></section>' : '<section class="card emptyc"><div class="et">켜져 있는 분야가 없어요.</div><div class="btnrow"><button type="button" class="btn" data-act="go" data-arg="settings">설정 열기</button></div></section>') + lists;
+  return hdr('오늘', sub) + '<!--cols-->' + top + todoCard + '<!--col-->' +
+    (tiles.length ? '<section><div class="sh"><h2>분야</h2><a href="#" class="lnk" data-act="go" data-arg="cats">모두 보기</a></div><div class="tiles">' + tiles.join('') + '</div></section>' : '<section class="card emptyc"><div class="et">켜져 있는 분야가 없어요.</div><div class="btnrow"><button type="button" class="btn" data-act="go" data-arg="settings">설정 열기</button></div></section>') + goalsToday + lists;
 }
 
 /* ---------- 분야 (목록) ---------- */
@@ -1399,6 +1433,35 @@ function viewRun(e) {
     (allRuns.length > 8 ? '<button type="button" class="addrow" data-act="toggleAll" data-arg="' + e.id + '">' + (allOpen ? '접기' : '모든 기록 보기 (' + allRuns.length + ')') + '</button>' : '') + '</section>';
   h += linkSection('exercise');
   return h;
+}
+
+/* ---------- 오늘 할 일 (추가·수정) ---------- */
+function todoLinks() {
+  const st = S.settings, o = [{ v: '', l: '연결 안 함' }];
+  if (st.show.exercise) st.exercises.forEach(e => o.push({ v: 'ex:' + e.id, l: e.name }));
+  if (st.show.sleep) o.push({ v: 'sleep', l: '수면' });
+  if (st.show.money) o.push({ v: 'money', l: '가계부' });
+  if (st.show.faith) o.push({ v: 'faith', l: '기도·말씀' });
+  return o;
+}
+const linkStr = l => !l ? '' : l.k === 'ex' ? 'ex:' + l.id : l.k;
+function sheetTodo(tid) {
+  const cur = tid ? S.todos.find(x => x.id === tid) : null;
+  if (tid && !cur) return;
+  const vals = { lk: cur ? linkStr(cur.link) : '', rep: cur && cur.daily ? 'daily' : 'once' };
+  const body = field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝, 청소, 전화하기"') +
+    '<div class="fld"><label>기록과 연결 (선택)</label>' + chipsHtml('lk', todoLinks(), vals.lk) + '<p class="fhint">연결하면 체크할 때 그 기록 창이 바로 열리고, 기록을 남기면 자동으로 완료돼요.</p></div>' +
+    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: '오늘만' }, { v: 'daily', l: '매일 반복' }], vals.rep) + '</div>' + (cur ? delBtn('todo|' + tid) : '') + ERR;
+  openSheet(cur ? '할 일 수정' : '할 일 추가', body, () => {
+    const lk = SHEET.vals.lk, k = lk.split(':');
+    let title = val('f-title').trim();
+    if (!title && lk) title = (todoLinks().find(x => x.v === lk) || {}).l || '';
+    if (!title) return setErr('할 일을 입력해 주세요.');
+    const rec = cur || { id: 'td' + uid(), d: todayStr(), done: false, doneAt: null, dn: {} };
+    rec.title = title; rec.link = lk ? (k[0] === 'ex' ? { k: 'ex', id: k[1] } : { k: k[0] }) : null; rec.daily = SHEET.vals.rep === 'daily';
+    if (!cur) S.todos.push(rec);
+    done();
+  }, { vals: vals, focus: !cur });
 }
 
 /* ---------- 목표 (주간·월간·연간) ---------- */
@@ -2468,7 +2531,8 @@ function mergeStates(a, b) {
     const n = out.logs.faith[d], o = O.logs.faith[d];
     out.logs.faith[d] = n ? Object.assign({}, o, n, { done: Object.assign({}, o.done, n.done) }) : o;
   });
-  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans);
+  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans); unionById(out.todos, O.todos);
+  out.todos.forEach(x => { const o = O.todos.find(y => y.id === x.id); if (o && o.dn) x.dn = Object.assign({}, o.dn, x.dn); });
   out.theme = a.theme;
   out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
   return out;
@@ -2598,6 +2662,29 @@ const ACT = {
   gpick(arg) { NAV.arg = arg; render(); },
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
   logEx(arg) { sheetLogEx(arg); },
+  addTodo() { sheetTodo(); }, editTodo(arg) { sheetTodo(arg); },
+  todoTg(arg) {
+    const x = S.todos.find(y => y.id === arg), t = todayStr();
+    if (!x) return;
+    const ln = x.link ? todoLinkName(x.link) : '';
+    if (ln) {
+      if (todoLinkDone(x.link)) { toast('기록이 있어서 완료예요'); return; }
+      const l = x.link;
+      if (l.k === 'ex') sheetLogEx(l.id); else if (l.k === 'sleep') sheetSleep(t); else if (l.k === 'money') sheetMoney(); else sheetFaith();
+      return;
+    }
+    if (x.daily) { x.dn = x.dn || {}; if (x.dn[t]) delete x.dn[t]; else x.dn[t] = true; }
+    else { x.done = !x.done; x.doneAt = x.done ? t : null; }
+    commit(); render();
+  },
+  todoSeed() {
+    const st = S.settings, add = (title, link) => S.todos.push({ id: 'td' + uid(), title: title, link: link, daily: true, d: todayStr(), done: false, doneAt: null, dn: {} });
+    if (st.show.exercise) st.exercises.forEach(e => add(e.name, { k: 'ex', id: e.id }));
+    if (st.show.sleep) add('수면 기록', { k: 'sleep' });
+    if (st.show.money) add('가계부 쓰기', { k: 'money' });
+    if (st.show.faith) add('기도·말씀', { k: 'faith' });
+    commit(); toast('추천 할 일을 넣었어요'); render();
+  },
   addPlan() { sheetPlan(); }, editPlan(arg) { sheetPlan(arg); },
   planPer(arg) { NAV.gper = arg; NAV.goff = 0; render(); },
   planOff(arg) { NAV.goff = Math.max(-3, (NAV.goff || 0) + Number(arg)); render(); },
@@ -2713,6 +2800,7 @@ const ACT = {
     else if (p[0] === 'inc') S.logs.inc = S.logs.inc.filter(x => x.id !== p[1]);
     else if (p[0] === 'note') S.logs.notes = S.logs.notes.filter(x => x.id !== p[1]);
     else if (p[0] === 'topic') S.settings.topics = S.settings.topics.filter(x => x.id !== p[1]);
+    else if (p[0] === 'todo') S.todos = S.todos.filter(x => x.id !== p[1]);
     else if (p[0] === 'plan') S.plans = S.plans.filter(x => x.id !== p[1]);
     else if (p[0] === 'fixed') S.settings.fixed = S.settings.fixed.filter(x => x.id !== p[1]);
     else if (p[0] === 'goal') { const e = S.settings.exercises.find(x => x.id === p[1]); if (e) e.goals = e.goals.filter(x => x.id !== p[2]); }
@@ -2906,8 +2994,8 @@ function renderSide() {
 }
 function render(top) {
   LAYOUT = applyLayout();
-  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible();
-  if (fixedChanged || got.length || bib) commit();
+  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible(), tdc = syncTodos();
+  if (fixedChanged || got.length || bib || tdc) commit();
   if (got.length) toast('버킷리스트를 이뤘어요: ' + got[0]);
   const v = byId('view');
   let html;
