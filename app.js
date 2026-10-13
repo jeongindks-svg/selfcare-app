@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 17;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 18;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -81,7 +81,7 @@ function defaultState() {
       topics: [], fixed: []
     },
     logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {}, wheel: {} },
-    bucket: [], wish: []
+    bucket: [], wish: [], plans: []
   };
 }
 function normalize(o) {
@@ -104,7 +104,7 @@ function normalize(o) {
   s.logs = Object.assign({}, d.logs, o.logs || {});
   ['ex', 'sleep', 'faith', 'nospend', 'bible', 'wheel'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
-  ['bucket', 'wish'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+  ['bucket', 'wish', 'plans'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
 }
 let S = defaultState();
@@ -350,11 +350,12 @@ function exStats(e) {
 }
 
 /* 운동 목표: 일간·주간·월간 합계, 또는 "주 2일, 하루 5km 이상" 같은 횟수 목표 */
-const GOAL_LABEL = { day: '일간', week: '주간', month: '월간' };
+const GOAL_LABEL = { day: '일간', week: '주간', month: '월간', year: '연간' };
+const GOAL_MAXD = { week: 7, month: 31, year: 366 };
 function goalDays(period) {
   const t = todayStr();
   if (period === 'day') return [t];
-  const start = period === 'week' ? weekKey(t) : t.slice(0, 7) + '-01', out = [];
+  const start = period === 'week' ? weekKey(t) : period === 'year' ? t.slice(0, 4) + '-01-01' : t.slice(0, 7) + '-01', out = [];
   for (let d = start; d <= t; d = addDays(d, 1)) out.push(d);
   return out;
 }
@@ -364,7 +365,7 @@ function goalProgress(e, g) {
   return { cur: cur, pct: g.target > 0 ? Math.min(100, cur / g.target * 100) : 0, done: cur >= g.target };
 }
 function goalTitle(e, g) {
-  if (g.type === 'days') return (g.period === 'week' ? '주 ' : '월 ') + g.target + '일 · 하루 ' + exGoal(g.min, e) + ' 이상';
+  if (g.type === 'days') return (g.period === 'week' ? '주 ' : g.period === 'month' ? '월 ' : '연 ') + g.target + '일 · 하루 ' + exGoal(g.min, e) + ' 이상';
   return GOAL_LABEL[g.period] + ' 목표 ' + exGoal(g.target, e);
 }
 const goalCur = (e, g, p) => g.type === 'days' ? p.cur + ' / ' + g.target + '일' : exVal(p.cur, e) + ' / ' + exGoal(g.target, e);
@@ -374,7 +375,7 @@ function goalRow(e, g, withName) {
 }
 function goalsCard(e) {
   if (!e.goals.length) return '';
-  const order = { day: 0, week: 1, month: 2 };
+  const order = { day: 0, week: 1, month: 2, year: 3 };
   return '<section class="card c-' + e.cls + '"><div class="sh2"><div class="a1b">목표</div>' + editLink('exercise:' + e.id) + '</div>' + e.goals.slice().sort((a, b) => order[a.period] - order[b.period]).map(g => goalRow(e, g, false)).join('') + '</section>';
 }
 
@@ -412,6 +413,24 @@ function exSummary(e) {
   const s = exStats(e);
   return '하루 평균 ' + exVal(s.avg, e) + ' · 최고 ' + exBest(s.pbDay, e);
 }
+
+/* 주간·월간·연간 목표: 기간마다 새로 세우고, 숫자 목표는 +/−로 쌓아요 */
+const PLAN_LABEL = { week: '주간', month: '월간', year: '연간' };
+function planKey(period, off) {
+  const t = todayStr(), o = off || 0;
+  if (period === 'week') return addDays(t, -parseD(t).getDay() - 7 * o);
+  if (period === 'month') return monthShift(t.slice(0, 7), -o);
+  return String(+t.slice(0, 4) - o);
+}
+function planWhen(period, off) {
+  const pk = planKey(period, off);
+  if (period === 'week') { const e = addDays(pk, 6), f = d => (+d.slice(5, 7)) + '.' + (+d.slice(8)); return (off === 0 ? '이번 주' : off === 1 ? '지난주' : off === -1 ? '다음 주' : '') + ' ' + f(pk) + ' ~ ' + f(e); }
+  if (period === 'month') return (off === 0 ? '이번 달 ' : off === 1 ? '지난달 ' : off === -1 ? '다음 달 ' : '') + ymLabel(pk);
+  return (off === 0 ? '올해 ' : off === 1 ? '작년 ' : off === -1 ? '내년 ' : '') + pk + '년';
+}
+const plansFor = (period, pk) => S.plans.filter(x => x.period === period && x.pk === pk);
+const planDone = x => x.target > 0 ? x.cur >= x.target : !!x.done;
+function planSummary(period) { const l = plansFor(period, planKey(period, 0)); return { n: l.length, done: l.filter(planDone).length }; }
 
 /* 버킷리스트 · 위시리스트 */
 function bucketStats() { const done = S.bucket.filter(x => x.done).length; return { total: S.bucket.length, done: done, open: S.bucket.length - done }; }
@@ -911,8 +930,8 @@ function paceChart(items) {
 }
 
 /* ================= 화면 ================= */
-let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0 };
-const ROUTE_TITLE = { today: '오늘', cats: '분야', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
+let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0, gper: 'week', goff: 0 };
+const ROUTE_TITLE = { today: '오늘', cats: '분야', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
   if (!top) return '분야';
@@ -1009,7 +1028,9 @@ function viewToday() {
   const gl = [];
   if (st.show.exercise) st.exercises.forEach(e => e.goals.forEach(g => gl.push(goalRow(e, g, true))));
   const goalsToday = gl.length ? '<section class="card"><div class="sh2"><div class="a1b">운동 목표</div><a href="#" class="lnk" data-act="go" data-arg="exlist">운동</a></div>' + gl.join('') + '</section>' : '';
-  return hdr('오늘', sub) + '<!--cols-->' + top + goalsToday + '<!--col-->' +
+  const pl = ['week', 'month', 'year'].map(per => { const q = planSummary(per); return '<button type="button" class="prow" data-act="goPlan" data-arg="' + per + '"><span class="pn">' + PLAN_LABEL[per] + '</span><span class="ptrack"><span style="width:' + (q.n ? 100 * q.done / q.n : 0).toFixed(0) + '%"></span></span><span class="pv">' + (q.n ? q.done + ' / ' + q.n : '없음') + '</span></button>'; }).join('');
+  const planCard = '<section class="card c-blue"><div class="sh2"><div class="a1b">목표</div><a href="#" class="lnk" data-act="go" data-arg="goals">관리</a></div>' + pl + '</section>';
+  return hdr('오늘', sub) + '<!--cols-->' + top + planCard + goalsToday + '<!--col-->' +
     (tiles.length ? '<section><div class="sh"><h2>분야</h2><a href="#" class="lnk" data-act="go" data-arg="cats">모두 보기</a></div><div class="tiles">' + tiles.join('') + '</div></section>' : '<section class="card emptyc"><div class="et">켜져 있는 분야가 없어요.</div><div class="btnrow"><button type="button" class="btn" data-act="go" data-arg="settings">설정 열기</button></div></section>') + lists;
 }
 
@@ -1038,6 +1059,7 @@ function viewCats() {
     const f = faithStats();
     rows += hubRow('faith', 'faith', 'faith', '신앙', wheelStats().rate == null ? '설정에서 항목을 켜 주세요' : '수레바퀴의 삶 ' + Math.round(wheelStats().rate * 100) + '% · 연속 ' + f.streak + '일');
   }
+  { const a = planSummary('week'), b2 = planSummary('month'); lrows += hubRow('goals', 'flag', 'blue', '목표', '주간 ' + a.done + '/' + a.n + ' · 월간 ' + b2.done + '/' + b2.n + ' · 연간 ' + planSummary('year').done + '/' + planSummary('year').n); }
   if (st.show.bucket) { const b = bucketStats(); lrows += hubRow('bucket', 'flag', 'bucket', '버킷리스트', b.total ? '이룬 ' + b.done + ' / ' + b.total : '하고 싶은 일을 적어 보세요'); }
   if (st.show.wish) { const w = wishStats(); lrows += hubRow('wish', 'gift', 'wish', '위시리스트', w.total ? (w.open ? w.open + '개 · 합계 ' + won(w.sum) : '모두 구입했어요') : '갖고 싶은 것을 적어 보세요'); }
   return '<header class="hdr hrow2"><h1>분야</h1><a href="#" class="lnk big" data-act="go" data-arg="settings">설정</a></header><!--cols-->' +
@@ -1379,6 +1401,43 @@ function viewRun(e) {
   return h;
 }
 
+/* ---------- 목표 (주간·월간·연간) ---------- */
+function planRow(x) {
+  const d = planDone(x), pct = x.target > 0 ? Math.min(100, x.cur / x.target * 100) : 0;
+  return '<div class="lirow c-blue"><button type="button" class="lick" data-act="planTg" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (d ? ' 다시 진행 중으로' : ' 달성')  + '">' + (d ? DONE_SVG : TODO_SVG) + '</button>' +
+    '<button type="button" class="litext" data-act="editPlan" data-arg="' + x.id + '"><span class="li1' + (d ? ' dn' : '') + '">' + esc(x.title) + '</span>' + (x.target > 0 ? '<span class="li2">' + fmtN(x.cur, 0) + ' / ' + fmtN(x.target, 0) + (x.unit ? ' ' + esc(x.unit) : '') + '</span><span class="lprog"><span style="width:' + pct.toFixed(0) + '%"></span></span>' : '') + '</button>' +
+    (x.target > 0 ? '<span class="plstep"><button type="button" data-act="planStep" data-arg="' + x.id + '|-1" aria-label="하나 줄이기">−</button><button type="button" data-act="planStep" data-arg="' + x.id + '|1" aria-label="하나 늘리기">+</button></span>' : '') + '</div>';
+}
+function viewGoals() {
+  const per = NAV.gper || 'week', off = NAV.goff || 0, pk = planKey(per, off), list = plansFor(per, pk), dn = list.filter(planDone).length;
+  let h = backHdr('목표', 'flag', 'blue', '') + '<div class="seg rangeseg" role="group" aria-label="기간 선택">' + ['week', 'month', 'year'].map(k => '<button type="button" data-act="planPer" data-arg="' + k + '" aria-pressed="' + (per === k) + '">' + PLAN_LABEL[k] + '</button>').join('') + '</div>';
+  h += '<div class="wknav"><button type="button" data-act="planOff" data-arg="1" aria-label="이전 기간"><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1L2 8l6 7"/></svg></button><span>' + planWhen(per, off) + '</span><button type="button" data-act="planOff" data-arg="-1" aria-label="다음 기간"><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 1l6 7-6 7"/></svg></button></div><!--cols-->';
+  h += '<section class="card c-blue"><div class="ml">' + PLAN_LABEL[per] + ' 목표 달성</div><div class="bigrow"><div class="big">' + dn + '<span class="u">/ ' + list.length + '</span></div><div class="sm nm">' + (list.length ? Math.round(100 * dn / list.length) + '%' : '목표를 세워 보세요') + '</div></div><div class="track"><div style="width:' + (list.length ? 100 * dn / list.length : 0).toFixed(0) + '%"></div></div></section>';
+  h += bigBtn('addPlan', '', 'blue', PLAN_LABEL[per] + ' 목표 추가') + '<!--col-->';
+  h += '<section class="group">' + (list.length ? list.map(planRow).join('') : '<div class="emptyrow">이 기간의 목표가 없어요.</div>') + '</section>';
+  const prev = plansFor(per, planKey(per, off + 1)).filter(x => !planDone(x));
+  if (off <= 0 && prev.length) h += '<button type="button" class="dashbtn" data-act="planCarry">지난 기간에 못 한 목표 ' + prev.length + '개 가져오기</button>';
+  return h;
+}
+function sheetPlan(pid) {
+  const cur = pid ? S.plans.find(x => x.id === pid) : null;
+  if (pid && !cur) return;
+  const vals = { per: cur ? cur.period : (NAV.gper || 'week') };
+  const body = '<div class="fld"><label>기간</label>' + chipsHtml('per', ['week', 'month', 'year'].map(k => ({ v: k, l: PLAN_LABEL[k] })), vals.per) + '</div>' +
+    field('목표', 'f-title', 'text', cur ? cur.title : '', 'maxlength="60" placeholder="예: 책 1권 읽기"') +
+    '<div class="two">' + field('목표 횟수·양 (선택)', 'f-target', 'number', cur && cur.target ? cur.target : '', 'inputmode="decimal" step="any" min="0" placeholder="예: 4"') + field('단위 (선택)', 'f-unit', 'text', cur ? cur.unit : '', 'maxlength="6" placeholder="예: 권, 회"') + '</div>' +
+    '<p class="fhint">숫자를 적으면 +/− 로 쌓아서 채우고, 비워 두면 체크만 해요.</p>' + (cur ? delBtn('plan|' + pid) : '') + ERR;
+  openSheet(cur ? '목표 수정' : '목표 추가', body, () => {
+    const title = val('f-title').trim(), target = Math.max(0, parseFloat(val('f-target')) || 0);
+    if (!title) return setErr('목표를 입력해 주세요.');
+    const rec = cur || { id: 'p' + uid(), pk: planKey(SHEET.vals.per, NAV.gper === SHEET.vals.per ? NAV.goff || 0 : 0), cur: 0, done: false, doneAt: null };
+    if (cur && cur.period !== SHEET.vals.per) rec.pk = planKey(SHEET.vals.per, 0);
+    rec.period = SHEET.vals.per; rec.title = title; rec.target = target; rec.unit = val('f-unit').trim();
+    if (!cur) S.plans.push(rec);
+    done();
+  }, { vals: vals, focus: !cur });
+}
+
 /* ---------- 버킷리스트 · 위시리스트 ---------- */
 const whenOf = x => (x.when === '올해' || x.when === '내년') ? x.when : '언젠가';
 const safeUrl = u => /^https?:\/\/\S+$/i.test(u || '') ? u : '';
@@ -1681,6 +1740,7 @@ function viewSettings() {
   if (ls) h += glabel('분야별 설정') + '<section class="group">' + ls + '</section>';
   const vp = viewportSize();
   h += '<!--col-->' + glabel('화면') + '<div class="seg" role="group" aria-label="화면 모드">' + [['auto', '자동'], ['light', '라이트'], ['dark', '다크']].map(x => '<button type="button" data-act="theme" data-arg="' + x[0] + '" aria-pressed="' + (S.theme === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+  h += glabel('글자 크기 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="글자 크기">' + [['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']].map(x => '<button type="button" data-act="fontSize" data-arg="' + x[0] + '" aria-pressed="' + (FONT_SIZE === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   h += glabel('화면 배치 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="화면 배치">' + [['auto', '자동'], ['phone', '폰'], ['tablet', '태블릿']].map(x => '<button type="button" data-act="layoutPref" data-arg="' + x[0] + '" aria-pressed="' + (LAYOUT_PREF === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<p class="subline">지금 화면 크기 ' + vp.w + ' × ' + vp.h + ' · ' + LAYOUT_NAME[LAYOUT] + '</p>' +
     '<p class="subline">앱 버전 ' + APP_VERSION + ' · ' + (isStandalone() ? '설치한 앱' : '브라우저') + (deviceOrientation() ? ' · 기기 방향 ' + deviceOrientation() : '') + '</p>';
@@ -1693,10 +1753,10 @@ function viewSettings() {
 }
 
 const VIEWS = {
-  today: () => viewToday(), cats: () => viewCats(), growth: () => viewGrowth(), growthd: () => viewGrowthD(), review: () => viewReview(), cal: () => viewCal(), mstat: () => viewMStat(), exlist: () => viewExList(),
+  today: () => viewToday(), cats: () => viewCats(), growth: () => viewGrowth(), growthd: () => viewGrowthD(), review: () => viewReview(), cal: () => viewCal(), goals: () => viewGoals(), mstat: () => viewMStat(), exlist: () => viewExList(),
   ex: () => viewEx(NAV.arg), sleep: () => viewSleep(), money: () => viewMoney(), faith: () => viewFaith(), bucket: () => viewBucket(), wish: () => viewWish(), settings: () => viewSettings()
 };
-const TAB_OF = { today: 'today', cats: 'cats', growth: 'growth', growthd: 'growth', review: 'review', cal: 'cal', mstat: 'cats', exlist: 'cats', ex: 'cats', sleep: 'cats', money: 'cats', faith: 'cats', bucket: 'cats', wish: 'cats', settings: 'cats' };
+const TAB_OF = { today: 'today', cats: 'cats', growth: 'growth', growthd: 'growth', review: 'review', cal: 'cal', goals: 'cats', mstat: 'cats', exlist: 'cats', ex: 'cats', sleep: 'cats', money: 'cats', faith: 'cats', bucket: 'cats', wish: 'cats', settings: 'cats' };
 
 /* ================= 시트(입력·수정 창) ================= */
 let SHEET = null;
@@ -1823,17 +1883,25 @@ function sheetLogEx(id, eid) {
 }
 
 /* ---- 수면 ---- */
+/* 시각은 키보드로만 입력해요 (예: 2330 또는 23:30) */
+function parseHM(v) {
+  const d = String(v == null ? '' : v).replace(/\D/g, '');
+  if (!d || d.length > 4) return null;
+  const h = d.length <= 2 ? +d : +d.slice(0, d.length - 2), m = d.length <= 2 ? 0 : +d.slice(-2);
+  return h > 23 || m > 59 ? null : PAD(h) + ':' + PAD(m);
+}
+const timeField = (label, id, value) => '<div class="fld"><label for="' + id + '">' + label + '</label><input id="' + id + '" class="tin" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 23:30" value="' + esc(value) + '" data-inp="timeFmt" data-chg="timeNorm"></div>';
 function sheetSleep(date, carry) {
   const t = todayStr(), d0 = date || t, ex = S.logs.sleep[d0];
   const vals = { score: ex && ex.score ? ex.score : (!ex && carry && carry.score ? carry.score : '') };
   const body = '<div class="fld"><label for="f-date">기상한 날</label><input id="f-date" type="date" value="' + d0 + '" max="' + t + '" data-chg="sleepDate" data-arg=""></div>' +
-    '<div class="two">' + field('취침 시각', 'f-bed', 'time', ex ? ex.bed : (carry ? carry.bed : '23:30')) + field('기상 시각', 'f-wake', 'time', ex ? ex.wake : (carry ? carry.wake : '07:00')) + '</div>' +
+    '<div class="two">' + timeField('취침 시각', 'f-bed', ex ? ex.bed : (carry ? carry.bed : '23:30')) + timeField('기상 시각', 'f-wake', ex ? ex.wake : (carry ? carry.wake : '07:00')) + '</div>' +
     (S.settings.rate ? '<div class="fld"><label>잘 잤나요? (10점 만점)</label><div class="scoregrid" role="group">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => '<button type="button" class="cs' + (n === vals.score ? ' on' : '') + '" data-act="pickVal" data-arg="score|' + n + '" data-grp="score" aria-pressed="' + (n === vals.score) + '">' + n + '</button>').join('') + '</div></div>' : '') +
     (ex ? '<button type="button" class="btn ghost danger" data-act="delSleep" data-arg="' + d0 + '">이 기록 삭제</button>' : '') + ERR;
   openSheet(ex ? '수면 기록 수정' : '수면 기록', body, () => {
-    const d = val('f-date'), bed = val('f-bed'), wake = val('f-wake');
+    const d = val('f-date'), bed = parseHM(val('f-bed')), wake = parseHM(val('f-wake'));
     if (!d || d > t) return setErr('날짜를 확인해 주세요.');
-    if (!bed || !wake) return setErr('취침과 기상 시각을 입력해 주세요.');
+    if (!bed || !wake) return setErr('취침과 기상 시각을 숫자로 입력해 주세요. 예: 23:30');
     const dur = (toMin(wake) - toMin(bed) + 1440) % 1440;
     if (dur < 60 || dur > 18 * 60) return setErr('수면 시간이 너무 짧거나 길어요. 시각을 확인해 주세요.');
     const rec = { bed: bed, wake: wake, dur: dur };
@@ -2017,13 +2085,13 @@ function sheetAddEx() {
 }
 /* ---- 운동 목표 (추가·수정) ---- */
 function goalFieldsHtml(e, v) {
-  const max = v.gper === 'week' ? 7 : 31;
-  let h = '<div class="fld"><label>기간</label>' + chipsHtml('gper', [{ v: 'day', l: '일간' }, { v: 'week', l: '주간' }, { v: 'month', l: '월간' }], v.gper) + '</div>';
+  const max = GOAL_MAXD[v.gper] || 31;
+  let h = '<div class="fld"><label>기간</label>' + chipsHtml('gper', [{ v: 'day', l: '일간' }, { v: 'week', l: '주간' }, { v: 'month', l: '월간' }, { v: 'year', l: '연간' }], v.gper) + '</div>';
   if (v.gper !== 'day') h += '<div class="fld"><label>목표 방식</label>' + chipsHtml('gtype', [{ v: 'total', l: '합계 달성' }, { v: 'days', l: '며칠 이상 하기' }], v.gtype) + '</div>';
   if (v.gper !== 'day' && v.gtype === 'days') {
     h += '<div class="two">' + field(GOAL_LABEL[v.gper] + ' 며칠 (최대 ' + max + ')', 'f-gt', 'number', v.gt, 'inputmode="numeric" step="1" min="1" max="' + max + '" placeholder="예: 2"') + field('하루 최소 (' + esc(e.unit) + ')', 'f-gmin', 'number', v.gmin, 'inputmode="decimal" step="any" min="0" placeholder="예: 5"') + '</div>' +
-      '<p class="fhint">예: ' + (v.gper === 'week' ? '주 2일, 하루 5km 이상 달리기' : '한 달에 8일, 하루 5km 이상 달리기') + '</p>';
-  } else h += field(GOAL_LABEL[v.gper] + ' 목표 (' + esc(e.unit) + ')', 'f-gt', 'number', v.gt, 'inputmode="decimal" step="any" min="0" placeholder="예: ' + (v.gper === 'day' ? '3' : v.gper === 'week' ? '15' : '60') + '"');
+      '<p class="fhint">예: ' + (v.gper === 'week' ? '주 2일, 하루 5km 이상 달리기' : v.gper === 'month' ? '한 달에 8일, 하루 5km 이상 달리기' : '1년에 100일, 하루 5km 이상 달리기') + '</p>';
+  } else h += field(GOAL_LABEL[v.gper] + ' 목표 (' + esc(e.unit) + ')', 'f-gt', 'number', v.gt, 'inputmode="decimal" step="any" min="0" placeholder="예: ' + (v.gper === 'day' ? '3' : v.gper === 'week' ? '15' : v.gper === 'month' ? '60' : '700') + '"');
   return h;
 }
 function syncGoal() {
@@ -2047,7 +2115,7 @@ function sheetGoal(eid, gid) {
     if (type === 'days') {
       const min = parseFloat(V.gmin);
       if (!(min > 0)) return setErr('하루 최소 값을 입력해 주세요.');
-      if (target !== Math.round(target) || target > (V.gper === 'week' ? 7 : 31)) return setErr('며칠은 ' + (V.gper === 'week' ? '1~7' : '1~31') + ' 사이 정수로 입력해 주세요.');
+      if (target !== Math.round(target) || target > GOAL_MAXD[V.gper]) return setErr('며칠은 1~' + GOAL_MAXD[V.gper] + ' 사이 정수로 입력해 주세요.');
       g.min = min;
     } else delete g.min;
     if (!cur) e.goals.push(g);
@@ -2400,7 +2468,7 @@ function mergeStates(a, b) {
     const n = out.logs.faith[d], o = O.logs.faith[d];
     out.logs.faith[d] = n ? Object.assign({}, o, n, { done: Object.assign({}, o.done, n.done) }) : o;
   });
-  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish);
+  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans);
   out.theme = a.theme;
   out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
   return out;
@@ -2511,6 +2579,7 @@ const ACT = {
     if (['ex', 'sleep', 'money', 'faith'].indexOf(p[0]) >= 0) NAV.range = 'week';
     if (p[0] === 'review') NAV.roff = 0;
     if (p[0] === 'cal') NAV.cal = { ym: '', sel: '' };
+    if (p[0] === 'goals') NAV.goff = 0;
     if (p[0] === 'mstat') NAV.stat = '';
     if (p[0] === 'money') { NAV.lm = ''; NAV.im = ''; }
     if (p[0] === 'faith') NAV.fw = 0;
@@ -2529,6 +2598,22 @@ const ACT = {
   gpick(arg) { NAV.arg = arg; render(); },
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
   logEx(arg) { sheetLogEx(arg); },
+  addPlan() { sheetPlan(); }, editPlan(arg) { sheetPlan(arg); },
+  planPer(arg) { NAV.gper = arg; NAV.goff = 0; render(); },
+  planOff(arg) { NAV.goff = Math.max(-3, (NAV.goff || 0) + Number(arg)); render(); },
+  goPlan(arg) { NAV.gper = arg; ACT.go('goals'); },
+  planTg(arg) {
+    const x = S.plans.find(y => y.id === arg);
+    if (!x) return;
+    if (x.target > 0) x.cur = x.cur >= x.target ? 0 : x.target; else x.done = !x.done;
+    x.doneAt = planDone(x) ? todayStr() : null; commit(); render();
+  },
+  planStep(arg) { const p = arg.split('|'), x = S.plans.find(y => y.id === p[0]); if (!x) return; x.cur = Math.max(0, x.cur + Number(p[1])); x.doneAt = planDone(x) ? todayStr() : null; commit(); render(); },
+  planCarry() {
+    const per = NAV.gper || 'week', pk = planKey(per, NAV.goff || 0), prev = plansFor(per, planKey(per, (NAV.goff || 0) + 1)).filter(x => !planDone(x));
+    prev.forEach(x => S.plans.push({ id: 'p' + uid(), period: per, pk: pk, title: x.title, target: x.target, unit: x.unit, cur: 0, done: false, doneAt: null }));
+    commit(); toast(prev.length + '개 가져왔어요'); render();
+  },
   logSleepPast() { const t = todayStr(); let d = addDays(t, -1); while (S.logs.sleep[d] && d > addDays(t, -60)) d = addDays(d, -1); sheetSleep(d); },
   logSleep(arg) { sheetSleep(arg || todayStr()); },
   logMoney() { sheetMoney(); },
@@ -2628,6 +2713,7 @@ const ACT = {
     else if (p[0] === 'inc') S.logs.inc = S.logs.inc.filter(x => x.id !== p[1]);
     else if (p[0] === 'note') S.logs.notes = S.logs.notes.filter(x => x.id !== p[1]);
     else if (p[0] === 'topic') S.settings.topics = S.settings.topics.filter(x => x.id !== p[1]);
+    else if (p[0] === 'plan') S.plans = S.plans.filter(x => x.id !== p[1]);
     else if (p[0] === 'fixed') S.settings.fixed = S.settings.fixed.filter(x => x.id !== p[1]);
     else if (p[0] === 'goal') { const e = S.settings.exercises.find(x => x.id === p[1]); if (e) e.goals = e.goals.filter(x => x.id !== p[2]); }
     else if (p[0] === 'bucket') S.bucket = S.bucket.filter(x => x.id !== p[1]);
@@ -2667,6 +2753,7 @@ const ACT = {
       S = defaultState(); S.theme = theme; commit(); closeSheet(); toast('초기화했어요'); render();
     });
   },
+  fontSize(arg) { FONT_SIZE = arg; try { localStorage.setItem(FS_KEY, arg); } catch (e) { /* ignore */ } applyFont(); render(); },
   layoutPref(arg) { LAYOUT_PREF = arg; try { localStorage.setItem(LAYOUT_KEY, arg); } catch (e) { /* ignore */ } render(); },
   theme(arg) { S.theme = arg; applyTheme(); commit(); render(); },
   tgShow(arg) { S.settings.show[arg] = !S.settings.show[arg]; commit(); render(); },
@@ -2726,6 +2813,7 @@ const ACT = {
 const INP = {
   runPrev(arg, el) { const c = el.id === 'f-val' ? decimal(el.value) : digits(el.value); if (c !== el.value) el.value = c; updateRunPreview(); },
   money(arg, el) { const d = String(el.value).replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''), f = d ? fmtN(Number(d), 0) : ''; if (f !== el.value) el.value = f; },
+  timeFmt(arg, el) { const d = String(el.value).replace(/\D/g, '').slice(0, 4), f = d.length > 2 ? d.slice(0, 2) + ':' + d.slice(2) : d; if (f !== el.value) el.value = f; },
   num(arg, el) { const c = decimal(el.value); if (c !== el.value) el.value = c; }
 };
 const CHG = {
@@ -2743,8 +2831,9 @@ const CHG = {
   faithDate(arg, v) { if (v) fillFaith(v); },
   sleepDate(arg, v) {
     if (!v || v > todayStr() || !SHEET) return;
-    sheetSleep(v, { bed: val('f-bed') || '23:30', wake: val('f-wake') || '07:00', score: SHEET.vals.score });
+    sheetSleep(v, { bed: parseHM(val('f-bed')) || '23:30', wake: parseHM(val('f-wake')) || '07:00', score: SHEET.vals.score });
   },
+  timeNorm(arg, v, el) { const n = parseHM(v); if (n && el) el.value = n; },
   renWheel(arg, v) { const w = S.settings.wheel.find(x => x.id === arg); if (w && v.trim()) w.name = v.trim(); commit(); render(); },
   renFaith(arg, v) { const f = S.settings.faith.find(x => x.id === arg); if (f && v.trim()) f.name = v.trim(); commit(); render(); }
 };
@@ -2753,6 +2842,10 @@ function applyTheme() {
   const r = document.documentElement;
   if (S.theme === 'dark' || S.theme === 'light') r.setAttribute('data-theme', S.theme); else r.removeAttribute('data-theme');
 }
+const FS_KEY = 'selfapp.fs';
+let FONT_SIZE = 'md';
+function applyFont() { const r = document.documentElement; if (FONT_SIZE === 'md') r.removeAttribute('data-fs'); else r.setAttribute('data-fs', FONT_SIZE); }
+function loadFont() { try { const v = localStorage.getItem(FS_KEY); if (v === 'lg' || v === 'xl' || v === 'md') FONT_SIZE = v; } catch (e) { /* 기본값 사용 */ } applyFont(); }
 let LAST = null, LAYOUT = 'phone';
 /* 화면 배치: phone(한 줄 + 아래 탭) / wide(사이드 메뉴 + 넓은 한 줄) / two(사이드 메뉴 + 2단)
    창의 실제 크기로 정해요. 태블릿에서 자동 판단이 안 맞으면 설정에서 직접 고를 수 있어요(이 기기에만 저장). */
@@ -2798,7 +2891,7 @@ function renderSide() {
   const st = S.settings, cur = NAV.route;
   const on = r => r === cur || (r === 'exlist' && cur === 'ex') || (r === 'money' && cur === 'mstat') || (r === 'growth' && cur === 'growthd');
   const item = (r, t, ic) => '<a href="#" class="' + (on(r) ? 'on' : '') + '" data-act="go" data-arg="' + r + '" data-tab="' + r + '"' + (on(r) ? ' aria-current="page"' : '') + '>' + ico(ic, 22, 1.8) + t + '</a>';
-  let h = '<div class="sbrand">Growth</div>' + item('today', '오늘', 'today') + item('cal', '캘린더', 'cal') + item('growth', 'Growth', 'trend') + item('review', '리뷰', 'review');
+  let h = '<div class="sbrand">Growth</div>' + item('today', '오늘', 'today') + item('cal', '캘린더', 'cal') + item('goals', '목표', 'flag') + item('growth', 'Growth', 'trend') + item('review', '리뷰', 'review');
   const rec = [];
   if (st.show.exercise) rec.push(item('exlist', '운동', 'run'));
   if (st.show.sleep) rec.push(item('sleep', '수면', 'sleep'));
@@ -2880,6 +2973,7 @@ function init() {
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && SHEET) closeSheet(); });
   loadLayoutPref();
+  loadFont();
   if (typeof window !== 'undefined' && window.addEventListener) {
     let rt = null;
     const again = () => { clearTimeout(rt); rt = setTimeout(() => { if (layoutMode() !== LAYOUT) render(); }, 150); };
