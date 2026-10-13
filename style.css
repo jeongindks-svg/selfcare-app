@@ -591,3 +591,9 @@ html[data-fs="xl"] body{zoom:1.25}
 .td1{font-size:17px;font-weight:500}.td1.dn{color:var(--sub);text-decoration:line-through}
 .td2{font-size:13px;color:var(--sub)}
 .tdck svg.off circle{stroke:var(--sub2)}
+
+/* v20: 오늘 화면은 간결하게 */
+#view{gap:20px}
+.hdr h1{font-size:36px;letter-spacing:-.8px}
+.pcols{gap:8px}
+.pcol{background:transparent;border:1px solid var(--line);min-height:104px}

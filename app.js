@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 19;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 20;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1028,7 +1028,7 @@ function tile(arg, icon, name, cls, big, sub) {
   return '<a href="#" class="tile c-' + cls + '" data-act="go" data-arg="' + arg + '"><div class="tn">' + ico(icon, 18, 2) + name + '</div><div class="tb">' + esc(big) + '</div><div class="ts">' + esc(sub) + '</div></a>';
 }
 function viewToday() {
-  const now = new Date(), st = S.settings, t = todayStr();
+  const now = new Date(), t = todayStr();
   const sub = (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일';
   const pcols = ['week', 'month', 'year'].map(per => { const v = planPct(per), q = planSummary(per); return '<button type="button" class="pcol" data-act="goPlan" data-arg="' + per + '"><span class="pl">' + PLAN_LABEL[per] + '</span><span class="pp">' + (v == null ? dash : v + '<i>%</i>') + '</span><span class="ptrack"><span style="width:' + (v || 0) + '%"></span></span><span class="ps">' + (q.n ? q.done + ' / ' + q.n + ' 달성' : '목표 세우기') + '</span></button>'; }).join('');
   const top = '<section class="card c-blue" aria-label="계획 달성률"><div class="sh2"><div class="a1b">계획 달성률</div><a href="#" class="lnk" data-act="go" data-arg="goals">목표 관리</a></div><div class="pcols">' + pcols + '</div></section>';
@@ -1037,35 +1037,7 @@ function viewToday() {
     (tds.length ? tds.slice().sort((a, b) => (todoDone(a) ? 1 : 0) - (todoDone(b) ? 1 : 0)).map(todoRow).join('') : '<div class="emptyrow">오늘 할 일을 적어 보세요. 러닝처럼 기록과 연결하면 체크할 때 바로 기록할 수 있어요.</div>') +
     '<button type="button" class="addrow" data-act="addTodo">' + ico('plus', 18, 2) + '할 일 추가</button>' +
     (S.todos.length ? '' : '<button type="button" class="addrow" data-act="todoSeed">추천 할 일 한 번에 넣기 (매일 반복)</button>') + '</section>';
-  const tiles = [];
-  if (st.show.exercise && st.exercises.length) {
-    const logged = st.exercises.filter(e => exSum(e.id, t) > 0);
-    const pcts = st.exercises.filter(e => e.weekly > 0).map(e => Math.min(1, exStats(e).sum7 / e.weekly));
-    const e0 = st.exercises[0], rs0 = e0.minutes ? runStats(e0) : null;
-    tiles.push(tile('exlist', 'run', '운동', 'run', logged.length ? logged[0].name + ' ' + exVal(exSum(logged[0].id, t), logged[0]) : dash,
-      rs0 && rs0.pace30 != null ? e0.name + ' 평균 페이스 ' + fmtPace(rs0.pace30) + ' /km' : (pcts.length ? '이번 주 목표 ' + Math.round(100 * sum(pcts) / pcts.length) + '%' : '오늘 기록 없음')));
-  }
-  if (st.show.sleep) {
-    const r = sleepOn(t);
-    tiles.push(tile('sleep', 'sleep', '수면', 'sleep', r ? fmtDur(r.dur) : dash, r ? (st.rate && r.score ? '평점 ' + r.score + ' / 10' : '오늘 아침 기록') : '오늘 아침 기록 없음'));
-  }
-  if (st.show.money) {
-    const sp = spendOn(t), m = moneyStats();
-    tiles.push(tile('money', 'money', '가계부', 'money', sp > 0 ? won(sp) : (S.logs.nospend[t] ? '지출 없음' : dash), ymNow() + ' ' + won(m.month) + ' / ' + won(budgetTotal())));
-  }
-  if (st.show.faith) {
-    const f = faithStats();
-    tiles.push(tile('faith', 'faith', '신앙', 'faith', f.items.length ? faithCount(t) + ' / ' + f.items.length : dash, '오늘 실천 · 연속 ' + f.streak + '일'));
-  }
-  const bs = bucketStats(), ws = wishStats(), lp = [];
-  if (st.show.bucket && bs.total) lp.push('버킷리스트 ' + bs.done + ' / ' + bs.total);
-  if (st.show.wish && ws.open) lp.push('위시 ' + ws.open + '개');
-  const lists = lp.length ? '<a href="#" class="group lstrow" data-act="go" data-arg="cats"><span class="l1">리스트</span><span class="l2r">' + lp.join(' · ') + '</span>' + CHEV + '</a>' : '';
-  const gl = [];
-  if (st.show.exercise) st.exercises.forEach(e => e.goals.forEach(g => gl.push(goalRow(e, g, true))));
-  const goalsToday = gl.length ? '<section class="card"><div class="sh2"><div class="a1b">운동 목표</div><a href="#" class="lnk" data-act="go" data-arg="exlist">운동</a></div>' + gl.join('') + '</section>' : '';
-  return hdr('오늘', sub) + '<!--cols-->' + top + todoCard + '<!--col-->' +
-    (tiles.length ? '<section><div class="sh"><h2>분야</h2><a href="#" class="lnk" data-act="go" data-arg="cats">모두 보기</a></div><div class="tiles">' + tiles.join('') + '</div></section>' : '<section class="card emptyc"><div class="et">켜져 있는 분야가 없어요.</div><div class="btnrow"><button type="button" class="btn" data-act="go" data-arg="settings">설정 열기</button></div></section>') + goalsToday + lists;
+  return hdr('오늘', sub) + top + todoCard;
 }
 
 /* ---------- 분야 (목록) ---------- */
