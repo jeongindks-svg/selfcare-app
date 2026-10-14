@@ -679,3 +679,17 @@ html[data-side] .card,html[data-side] .group{box-shadow:0 1px 3px rgba(0,0,0,.07
 .tdc{font-size:13px;font-weight:700;color:var(--sub);background:var(--track2);border-radius:10px;padding:1px 8px;flex:none}
 .tdck svg.part circle{stroke:var(--c)}.tdck svg.part circle.bg{stroke:var(--track)}
 .tdt{justify-content:flex-start}
+
+/* v25: 알림 · 숫자 직접 입력 */
+.sval{border:0;background:transparent;font:inherit;font-size:16px;font-weight:600;color:var(--text);padding:6px 4px;border-radius:10px;text-decoration:underline dotted var(--sub2);text-underline-offset:4px}
+.tdc{border:0;font:inherit;font-size:13px;font-weight:700;cursor:pointer;min-height:30px;margin:0 6px}
+.plstep .plnum{width:auto;min-width:44px;padding:0 8px;background:transparent;font-size:16px;text-decoration:underline dotted var(--sub2);text-underline-offset:4px}
+.bibn{border:0;background:transparent;font:inherit;color:inherit}
+.bibn span{display:block}
+.gh.row{display:flex;justify-content:space-between;align-items:center}
+.gh.row .lnk{min-height:28px;font-weight:400}
+.rb{font-size:12px;font-weight:800;border-radius:10px;padding:2px 8px;background:var(--track2);color:var(--text2);flex:none}
+.rb.soon{background:var(--amber);color:#2B1B00}
+.rb.late{background:var(--bad);color:#fff}
+.tdsnz{border:0;background:var(--track2);color:var(--text2);border-radius:10px;min-height:34px;padding:0 10px;font-size:13px;font-weight:600;flex:none}
+.rems{box-shadow:inset 3px 0 0 var(--blue)}
