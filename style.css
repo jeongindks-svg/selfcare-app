@@ -563,8 +563,6 @@ html[data-side] #toast{bottom:32px}
 .invbars{padding:0 16px 8px}
 
 /* v18: 읽기 쉽게 · 접근성 */
-html[data-fs="lg"] body{zoom:1.12}
-html[data-fs="xl"] body{zoom:1.25}
 :focus-visible{outline:3px solid var(--link);outline-offset:2px}
 .lirow .lick{min-width:48px}
 .plstep{display:flex;gap:6px;margin-right:8px;flex:none}
@@ -620,3 +618,58 @@ html[data-fs="xl"] body{zoom:1.25}
 .thead .mk{font-size:12px;font-weight:600;color:var(--sub)}
 .tdskip,.td2{display:none}
 @media (max-width:360px){.tdm .mk{width:30px}}
+
+/* ===== v23: 촘촘하게 · 큰 화면 배치 ===== */
+html[data-fs="sm"] body{zoom:.9}
+html[data-fs="md"] body{zoom:1}
+html[data-fs="lg"] body{zoom:1.12}
+html[data-fs="xl"] body{zoom:1.25}
+@media (min-width:1500px){html[data-fs="sm"] body{zoom:1.02}html[data-fs="md"] body{zoom:1.12}}
+#app{padding:8px 14px 96px}
+#view{gap:14px}
+.hdr h1{font-size:30px;letter-spacing:-.6px}
+.hdr .date{font-size:13px}
+.card{padding:14px;border-radius:16px}
+.group{border-radius:16px}
+.gh{padding:11px 14px 8px;font-size:13px}
+.sh h2{font-size:18px}
+.erow{min-height:48px;padding:0 14px}
+.lrow{min-height:54px;padding:0 14px}
+.lirow{min-height:52px}
+.todo{min-height:48px}
+.tdck{height:48px;width:46px}
+.tdt{min-height:44px}
+.td1{font-size:16px}
+.crow{min-height:52px}
+.hrw{min-height:56px}
+.addrow{min-height:46px;padding:0 14px}
+.emptyrow{padding:14px}
+.btn{min-height:44px}.btn.full{min-height:46px;font-size:16px}
+.seg button{min-height:38px}
+.strow{min-height:56px}
+.trow{min-height:48px}
+.trow2{min-height:42px}
+.pcol{min-height:92px;padding:8px 4px 6px}
+.pcol .pp{font-size:24px}
+.big{font-size:30px}
+.fhead{margin-top:10px}.frow{min-height:36px}
+.catrow{padding:8px 0}
+.sheet .fld input,.sheet .fld textarea{min-height:42px}
+/* 세로로 든 태블릿: 폰 배치 그대로 쓰되 너무 좁지 않게 */
+@media (min-width:700px){#app{max-width:760px}#tabs{width:min(100%,760px)}}
+/* 태블릿·컴퓨터 */
+html[data-side] #side{width:224px;box-shadow:inset -1px 0 0 var(--line)}
+html[data-side] #side .sbrand{font-size:20px;padding:2px 12px 12px}
+html[data-side] #side a{min-height:40px;font-size:15px;border-radius:10px}
+html[data-side] #side a:hover{background:var(--track2)}
+html[data-side] #app{margin-left:224px;padding:22px 36px 48px}
+html[data-side] #view{max-width:1240px}
+html[data-side] .twocol{gap:22px}
+html[data-side] .col{gap:14px}
+html[data-side] #view > *{margin-bottom:14px}
+html[data-side] .onecol{margin:0 auto;max-width:760px;gap:14px}
+html[data-side] .hdr h1{font-size:32px}
+html[data-side] .card,html[data-side] .group{box-shadow:0 1px 3px rgba(0,0,0,.07)}
+@media (min-width:1500px){html[data-side] #view{max-width:1400px}html[data-side] .ctiles{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}}
+.bigrow{align-items:baseline}
+.bigrow .sm.nm{margin:0}
