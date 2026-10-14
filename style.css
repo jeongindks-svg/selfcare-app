@@ -720,3 +720,17 @@ html[data-side] .card,html[data-side] .group{box-shadow:0 1px 3px rgba(0,0,0,.07
 .carry{font-style:normal;font-size:12px;color:var(--sub);flex:none}
 .tdn{flex:0 1 34%;min-width:30px;max-width:34%;min-height:34px;border:0;background:transparent;color:var(--sub);font:inherit;font-size:13px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px;border-radius:8px}
 .tdn.has{color:var(--text2);background:var(--track2)}
+
+/* v27: 기록 = 바탕화면 */
+.desk{border-radius:22px;overflow:hidden;background:radial-gradient(120% 90% at 85% 0%,rgba(255,170,120,.55),transparent 55%),radial-gradient(100% 80% at 0% 100%,rgba(110,90,255,.55),transparent 60%),linear-gradient(135deg,#2D5BE3 0%,#5B3FD6 55%,#B8468F 100%);min-height:min(64vh,520px);box-shadow:0 6px 22px rgba(40,40,120,.22)}
+.deskbar{display:flex;justify-content:space-between;align-items:center;height:30px;padding:0 16px;background:rgba(255,255,255,.18);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;font-size:13px;font-weight:600}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:20px 6px;padding:22px 14px 28px;align-content:start}
+.dicon{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;padding:6px 2px;border-radius:12px;color:#fff;min-width:0}
+.dicon:hover{background:rgba(255,255,255,.16)}
+.dicon:active{background:rgba(255,255,255,.26)}
+.dbox{display:flex;align-items:center;justify-content:center;width:62px;height:62px;border-radius:16px;color:#fff;background:linear-gradient(160deg,var(--c),var(--cb));box-shadow:0 3px 8px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.35)}
+.dn1{font-size:13px;font-weight:600;line-height:1.25;text-shadow:0 1px 3px rgba(0,0,0,.55);word-break:keep-all}
+.dn2{font-size:11px;line-height:1.2;color:rgba(255,255,255,.82);text-shadow:0 1px 2px rgba(0,0,0,.5);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:700px){.dgrid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:26px 8px;padding:30px 24px 36px}.dbox{width:72px;height:72px;border-radius:19px}.dn1{font-size:14px}.dn2{font-size:12px}}
+html[data-side] .onecol:has(> .desk){max-width:none}
+html[data-side] .desk{min-height:min(72vh,640px)}
