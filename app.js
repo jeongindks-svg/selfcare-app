@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 28;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 29;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -780,7 +780,7 @@ function applyBucketLinks() {
   S.bucket.forEach(it => {
     if (!it.link || it.done || it.autoSeen) return;
     const info = bucketLinkInfo(it);
-    if (info && info.done) { it.done = true; it.doneAt = info.date || todayStr(); it.autoSeen = true; got.push(it.title); }
+    if (info && info.done) { it.done = true; it.doneAt = info.date || todayStr(); it.doneYear = +it.doneAt.slice(0, 4); it.autoSeen = true; got.push(it.title); }
   });
   return got;
 }
@@ -830,6 +830,22 @@ function weekSummary(end) {
   const nb = st.show.bucket ? S.bucket.filter(inWin).length : 0, nw = st.show.wish ? S.wish.filter(inWin).length : 0;
   if (nb + nw > 0) rows.push({ cls: 'bucket', name: '이룬 리스트', value: (nb ? '버킷 ' + nb : '') + (nb && nw ? ' · ' : '') + (nw ? '위시 ' + nw : ''), has: true, delta: null, deltaText: '', good: 'up', go: nb ? 'bucket' : 'wish' });
   return rows;
+}
+
+/* 내 버킷리스트 (처음 한 번 넣어 드려요). 'title|이룬 날짜' 형식이고, 날짜가 있으면 이룬 항목이에요. */
+const BUCKET_SEED = ["Get a bicycle|2020.07.06", "Travel abroad with family|", "Travel alone|2024.03.25", "See cherry blossoms in Japan|", "Visit Salar de Uyuni, Bolivia|", "Go up the Burj Khalifa, Dubai|", "Travel to New Zealand|", "Travel to Australia|", "Travel to Hong Kong|", "Travel to Okinawa, Japan|", "Watch a sunrise|2020.01.01", "Watch a sunset|2026.01.21", "Ride a train alone|2021.03.11", "Fly alone|2025.09.06", "Go to a desert|", "Ride an elephant|", "Ride a camel|", "Go on a cruise|", "Send my parents on a trip|", "Fly first class|", "Fly business class|", "Ride a helicopter|", "Live abroad for 3 months|", "Ride a hot air balloon|", "Ride a submarine|", "Visit the Eiffel Tower|2025.09.14", "Visit Niagara Falls|", "Japanese hot spring|2025.01.21", "Watch a World Cup live|", "Watch an Olympics live|", "Watch a Tottenham match live|", "Get Son Heung-min's autograph|", "Go canoeing|", "Sleep under the stars|", "Watch a foreign movie without subtitles|", "Part-time job|2018.10.08", "Scuba diving|", "Dye my hair|", "Stay awake 24 hours|2018.08.04", "Play GTA6|", "Take a photo at the same place every day for a year|", "Get a driver's license|2019.10.10", "See a shooting star|2020.09.22", "Eat steak in Australia|", "Visit the Louvre|2025.09.15", "Stay at a 5-star hotel|2023.11.22", "Go to LA|", "Yeosu night sea|", "Eat curry in India|", "Eat sausage in Germany|", "Make a foreign friend|", "Ride a sleeper train|", "Read the Bible once|2022.09.16", "Go on a mission trip to the Philippines|", "Evangelize a friend|2018.05.26", "Visit the Colosseum in Rome|", "Watch a sunset on a Hawaii beach|", "Build a PC I'm satisfied with|2020.04.04", "Experience zero gravity|", "Escape being single (first relationship)|2018.07.06", "Learn to swim|2024.07.02", "Raise a puppy|", "Learn piano|", "Learn guitar|2020.03", "Save 1 million won|2022.05.10", "Cure acne completely|2019", "Reach 180cm or taller|", "Learn how to invest in stocks|2021.05.21", "Donate blood|2018.08.07", "Drive a car|2019.10", "Ride a roller coaster|2020.08.13", "Try contact lenses|2019.05.29", "Visit an observatory|", "Learn Japanese well enough for local conversation|", "Learn Chinese well enough for local conversation|", "Learn English well enough for local conversation|", "Memorize the names of 100 countries|", "Switch to the latest phone|2020.04.13", "Read an English book by translating it|", "Reach Gold tier in LoL|2018.03.14", "Edit a video and upload it to YouTube|", "Own a fountain pen|", "Be in the top 1% of a game|", "Memorize an entire English vocab book|", "Receive the gift of tongues|2020", "Take a photo with a celebrity|", "Fly from Incheon Airport|2025.09.13", "Study focused for 3 hours|2025.04.09", "Own a car|", "Move out on my own|", "Buy my own home|", "Fill up my passport pages|", "Watch a national team match live (soccer)|", "Take a family photo|", "Go one day without sinning|", "Travel abroad with a girlfriend|", "Become ambidextrous|", "Save 10 million won in my account|", "Save 100 million won in my account|", "Go to the gym|2021.11.09", "Appear on TV|", "Finish watching anime One Piece|", "Finish the Harry Potter series|2021.05", "Finish the Avengers series|", "Finish the Lord of the Rings series|", "Run a full marathon|", "Visit Osaka|2023.11.29", "Visit Sapporo|2026.02.10", "Travel to Dubai|", "Get an A or higher GPA|2019.12", "Finish a whole diary|", "Live one day without a smartphone|", "Learn 10 dishes I'm confident making|", "Ride the Trans-Siberian Railway|", "Visit Universal Studios|", "See the aurora|", "Go paragliding|", "Visit an undersea hotel|", "Earn 100,000 won from stocks|2021.07", "Go to a drive-in theater|", "Earn 1 million won from stocks|2024.01.08", "Try shooting|2022.12.27", "White Christmas with a girlfriend|", "Visit an airport VIP lounge|2025.09.22", "Marriage|", "Walk across a Han River bridge alone|", "Travel around Seoul alone|2022.12.01", "Learn boxing|", "Visit Disneyland|", "Climb to the top of Hallasan|", "Climb to the top of Seoraksan|", "Build a snowman on a heavy snow day|", "Sail a yacht|", "Become a building owner|", "Live a month on Jeju Island|", "See fireflies|", "See the Milky Way|", "Go fishing|", "Organize travel photos into a photobook|", "Make my teen years album|", "Make my 20s album|", "Make my 30s album|", "Go on a pilgrimage|", "Go camping|", "Reach 75kg or more|", "Learn sign language|", "Read a whole book at a cafe|", "Propose|", "Use bath bombs|2022.10.29", "Pledge organ donation|", "Stay at Marina Bay Sands, Singapore|", "Get a CAD certification|", "Go see a basketball game|", "Write a poem|", "Live in Seoul for over a month|", "Attend a TV show taping as audience|", "Watch a rocket launch live|", "Eat out without worrying about money|", "Drive a sports car|", "Visit the Blue House|", "Visit North Korea|", "Go to the Arctic|", "Backpack through Europe|", "Live a month in Japan|", "Live a month in Australia|", "Live a month in New York|", "Go to a lantern festival|", "Get Air-Conditioning & Refrigeration Machinery certification|2025.09.12", "Make a travel vlog|", "Solo camping|", "Cycle around Barcelona, Spain|", "Graduate from university|", "Sing with a guitar in front of a quiet beach|", "Complete the 1000-day prayer offering|", "Get Fire Protection Facilities certification|", "Write 50 book reports|", "Do daily devotions (QT) for a full month without missing|", "Buy Lego Van Gogh Starry Night|", "Visit Ghibli Park|", "Buy a G-Shock watch|", "Buy an IWC watch|", "Read the Bible twice|2023.04.21", "Drive a Porsche Taycan|", "Buy Chanel No. 5 perfume|", "Buy a monitor with 144Hz or higher refresh rate|", "Fully pay the 1000-day prayer offering|", "Memorize 1,000 English words|", "Memorize 3,000 English words|", "Climb to the top of Jirisan|", "Buy a tablet pouch|", "Buy Kilian Angels' Share perfume|", "Buy ADER ERROR clothing|2023.07.10", "Visit a pop-up store|2022.11.29", "Visit Yanghwajin Foreign Missionaries Cemetery|2022.11.28", "Try climbing|2023.04.10", "Go to a prayer retreat and pray|", "Buy a camera|2025.02.19", "Cycle the whole country (Busan to Seoul)|2024.03.25", "Buy a Sony A7C II camera|2025.02.19", "Buy a new bicycle (500$+)|", "Buy a Nintendo console|2023.09.18", "Buy an ADER ERROR bag|", "Buy STUSSY clothing|2023.04.25", "Own 10 pairs of shoes I like|2024.02.27", "Buy sunglasses|", "Eat omakase|", "Eat at a Michelin restaurant|2024.11.28", "Read the Bible three times|2025.10.14", "Do 100+ push-ups daily for a month|", "Visit a parrot cafe|", "Visit a cat cafe|", "Visit a dog cafe|", "Get a personal color diagnosis|", "Grow a plant|", "Take a one-day class|", "Run 3km in 12:30|", "Buy Human Made clothing|2024.01.29", "Learn judo|", "Go to a concert|", "Write a diary for 365 days|", "Multiply our cell group (split into two)|", "Buy Arc'teryx products|2024.02.10", "Try car camping|", "Attend a court trial|", "Bake bread|", "Learn surfing|", "Travel to the Netherlands, land of windmills|", "Set foot on every continent|", "Stay at Grand Hyatt Fukuoka|", "Walk in Central Park, New York|", "Camp on a wide ranch in Mongolia|", "Go on a volcano tour|", "Visit Tongil Observatory|", "Try an iPhone|", "Buy Gentle Monster products|", "Collect 10 favorite perfume brands|", "Buy carhartt products|", "Collect 10 watches|", "Eat caviar, one of the world's three great delicacies|", "Learn drone and film with it|", "Visit Times Square, New York|", "Get a CPR certification|", "Visit the Sphere (giant dome venue)|", "Appear in a movie|", "Conquer Korea's 100 famous mountains|", "Buy Mischief products|", "Buy a Lego set of 1,000+ pieces|", "Make tanghulu|", "Make pasta|", "Buy a Bluetooth speaker|", "Stay at Ananti, Gijang|", "Go up Lotte World Tower observatory, Seoul|", "Get 10+ people at our cell group meeting|2025.04.02", "Go up BIFC|", "Buy Byredo perfume|", "Buy Diptyque perfume|", "Buy Jo Malone perfume|", "Buy Tom Ford perfume|", "Buy patagonia products|", "Cycle to Miryang and back|", "Play The Legend of Zelda|2025.09.13", "Clear Mario Odyssey completely|", "Try a Gwangalli yacht tour|", "Snowboard at a ski resort|2025.01.22", "Take the Donghae Line to Taehwagang|", "Start from Children's Grand Park and climb Geumjeongsan summit|2024.06.05", "Reach Platinum tier in LoL|", "Travel abroad 20 times|", "Travel abroad 30 times|", "Sell something on Danggeun Market|2026.01.30", "Try CrossFit|", "Get eyesight of 0.8 or better|", "Go see a fashion show|", "Write a novel that fits my sensibility|", "Try taking snapshots|", "Create my own signature|2024.03.05", "Visit a Musinsa offline store|2024.03.08", "Read all the books currently in my room (24.03.01)|", "Bowl over 200|", "See the Egyptian pyramids|", "Visit the Grand Canyon|", "Visit Greece|", "See a real whale|", "See a real dolphin|", "Learn to ride a motorcycle|", "Get a job|", "Go on a blind date|2025.06.13", "Visit Ulleungdo|", "Visit Dokdo|", "Learn tennis|", "Live in Southeast Asia for 2 weeks|", "Hike Jangsan|", "Read a whole newspaper|", "Drive abroad|", "Learn golf|", "Spend a whole day at a manga cafe|", "Ride the East Sea Rail Bike|", "Cycle along the east coast|", "Buy Supreme products|", "Finish the SPY x FAMILY series|", "Own 5 Stussy clothing items|", "Visit Yoron Island, southernmost Kagoshima, Japan|", "Cycle the whole country southbound (Seoul to Busan)|", "Finish reading Solo Leveling|", "Get a lifeguard certification|", "Watch a performance at Busan National Gugak Center|", "Watch a performance at Busan Concert Hall|", "Visit Ttangkkeut Village, Haenam|", "Write in an English diary|", "Receive 100,000+ won in dividends|", "Keep a dream journal|", "Go to a movie alone|", "Buy headphones|2025.07.19", "Attend an Isaiah 61 worship|", "Reach Master tier in TFT|", "Cook haemul pajeon (seafood pancake)|", "Cycle the Geum River bike path|", "Cycle the Yeongsan River bike path|", "Cycle the Seomjin River bike path|", "Eat at Michelin restaurant Mosu|", "Cycle the Jeju circuit bike path|", "Complete the Grand Slam of Korean bike trails|", "Zone out in a camping chair at Hoedong Reservoir|2026.01.17", "Send an email to my future self|", "Organize my life chronicle|", "Write a \"one sentence a day\" diary for 30 days|", "Spend a day riding a random bus in an unfamiliar neighborhood|", "Make 5 quotes I can actually use|", "Film a self-interview video|", "Leave an anonymous letter without my name|", "Collect only sentences I like for a month (books, movies, conversations)|", "Create 3 handwriting styles of my own|", "Keep a \"summer emotion notebook\" for 7 days (temperature, mood, smell, color, sound)|", "Read a book at a cafe on a heavy rainy day|", "Take photos and develop a film camera|", "Zone out looking out the window for 30 minutes doing nothing|", "See a Porsche Macan EV in person|", "Travel to a small Japanese town alone|", "Drive a car in Japan|", "Play Pokémon on Nintendo Switch|", "Play Animal Crossing on Switch|", "Nap while listening to cicadas|", "Get 300% return on one stock|2025.01.03", "Dive and swim in a valley stream|", "Learn jazz piano|", "Visit a place I pick on a map with my eyes closed, within a year|", "Watch fireworks from a boat|", "Get a tailored suit|", "Drive a Porsche Panamera|", "Take part in a triathlon|"];
+function importBucketSeed() {
+  if (S.bucketSeedV >= 1) return false;
+  const have = new Set(S.bucket.map(x => x.title));
+  BUCKET_SEED.forEach((row, i) => {
+    const k = row.lastIndexOf('|'), title = row.slice(0, k), dt = row.slice(k + 1);
+    if (have.has(title)) return;
+    const p = dt ? dt.split('.') : [], rec = { id: 'bks' + i, title: title, memo: '', when: '언젠가', done: !!dt, doneAt: null, doneYear: null, addedAt: null };
+    if (dt) { rec.doneYear = +p[0]; rec.doneAt = p[0] + '-' + (p[1] || '01') + '-' + (p[2] || '01'); }
+    S.bucket.push(rec);
+  });
+  S.bucketSeedV = 1;
+  return true;
 }
 
 /* 예시 데이터 */
@@ -1004,7 +1020,7 @@ function paceChart(items) {
 }
 
 /* ================= 화면 ================= */
-let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0 };
+let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0, bf: 'open' };
 const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
@@ -1605,30 +1621,44 @@ function sheetPlan(pid) {
 /* ---------- 버킷리스트 · 위시리스트 ---------- */
 const whenOf = x => (x.when === '올해' || x.when === '내년') ? x.when : '언젠가';
 const safeUrl = u => /^https?:\/\/\S+$/i.test(u || '') ? u : '';
-function listRow(kind, it, idx) {
+function listRow(kind, it, idx, total) {
   const bucket = kind === 'bucket', act = bucket ? 'Bucket' : 'Wish', title = bucket ? it.title : it.name;
   const info = bucket && !it.done ? bucketLinkInfo(it) : null;
   const fit = !bucket ? wishFit(it) : null;
-  const sub = it.done ? (bucket && it.autoSeen ? '운동 기록으로 이뤘어요 · ' : (bucket ? '이룬 날 ' : '구입한 날 ')) + (it.doneAt ? md(it.doneAt) : '')
+  const yr = it.doneYear || (it.doneAt ? +it.doneAt.slice(0, 4) : 0);
+  const sub = it.done ? (bucket ? (it.autoSeen ? '운동 기록으로 이뤘어요 · ' : '이룬 해 ') + (yr ? yr + '년' : '') : '구입한 날 ' + (it.doneAt ? md(it.doneAt) : ''))
     : (info ? esc(info.goal) + ' · ' + esc(info.text) : (it.memo ? esc(it.memo) : '')) + (bucket && it.addedAt ? (it.memo || info ? ' · ' : '') + '기록 ' + md(it.addedAt) : '') + (fit ? ' <span class="fit ' + fit + '">' + (fit === 'ok' ? '이번 달 예산 안' : '이번 달 예산 초과') + '</span>' : '');
   const price = !bucket && it.price > 0 ? '<span class="liprice">' + won(it.price) + '</span>' : '';
   const link = !bucket && safeUrl(it.link) ? '<a class="lilink" href="' + esc(it.link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(title) + ' 링크 열기">링크</a>' : '';
-  return '<div class="lirow c-' + kind + '"><button type="button" class="lick" data-act="tg' + act + '" data-arg="' + it.id + '" aria-pressed="' + !!it.done + '" aria-label="' + esc(title) + (it.done ? ' 다시 진행 중으로' : (bucket ? ' 이뤘어요' : ' 구입했어요')) + '">' + (it.done ? DONE_SVG : TODO_SVG) + '</button>' +
-    '<button type="button" class="litext" data-act="edit' + act + '" data-arg="' + it.id + '"><span class="li1' + (it.done ? ' dn' : '') + '">' + (idx ? '<span class="lino">' + idx + '</span>' : '') + esc(title) + '</span>' + (sub ? '<span class="li2">' + sub + '</span>' : '') + (info ? '<span class="lprog"><span style="width:' + info.pct.toFixed(0) + '%"></span></span>' : '') + '</button>' + link + price + '</div>';
+  return '<div class="lirow c-' + kind + '">' + (idx ? '<button type="button" class="lino" data-act="bucketNum" data-arg="' + it.id + '|' + idx + '|' + total + '" aria-label="번호 ' + idx + ' 바꾸기">' + idx + '</button>' : '') + '<button type="button" class="lick" data-act="tg' + act + '" data-arg="' + it.id + '" aria-pressed="' + !!it.done + '" aria-label="' + esc(title) + (it.done ? ' 다시 진행 중으로' : (bucket ? ' 이뤘어요' : ' 구입했어요')) + '">' + (it.done ? DONE_SVG : TODO_SVG) + '</button>' +
+    '<button type="button" class="litext" data-act="edit' + act + '" data-arg="' + it.id + '"><span class="li1' + (it.done ? ' dn' : '') + '">' + esc(title) + '</span>' + (sub ? '<span class="li2">' + sub + '</span>' : '') + (info ? '<span class="lprog"><span style="width:' + info.pct.toFixed(0) + '%"></span></span>' : '') + '</button>' + link + price + '</div>';
+}
+const bucketSection = x => x.done ? 'done' : whenOf(x);
+function bucketMove(id, pos) {
+  const it = S.bucket.find(x => x.id === id);
+  if (!it) return;
+  const sec = bucketSection(it), same = S.bucket.filter(x => bucketSection(x) === sec && x.id !== id);
+  pos = clamp(pos, 1, same.length + 1);
+  S.bucket = S.bucket.filter(x => x.id !== id);
+  if (pos > same.length) { const last = same[same.length - 1]; S.bucket.splice(last ? S.bucket.indexOf(last) + 1 : S.bucket.length, 0, it); }
+  else S.bucket.splice(S.bucket.indexOf(same[pos - 1]), 0, it);
 }
 function viewBucket() {
-  let num = 0;   // 번호는 올해 → 내년 → 언젠가 → 이룬 것 순서로 이어서 매겨요
-  const st = bucketStats(), pct = st.total ? Math.round(100 * st.done / st.total) : 0;
-  let h = backHdr('버킷리스트', 'flag', 'bucket', '') + '<!--cols-->';
+  const st = bucketStats(), pct = st.total ? Math.round(100 * st.done / st.total) : 0, f = NAV.bf === 'done' ? 'done' : 'open';
+  let h = backHdr('버킷리스트', 'flag', 'bucket', '') + '<div class="seg rangeseg" role="group" aria-label="보기">' + [['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div><!--cols-->';
   h += '<section class="card c-bucket"><div class="ml">이룬 것</div><div class="bigrow"><div class="big">' + st.done + '<span class="u">/ ' + st.total + '</span></div><div class="sm nm">' + pct + '%</div></div><div class="track"><div style="width:' + pct + '%"></div></div></section>';
   h += bigBtn('addBucket', '', 'bucket', '버킷리스트 추가') + '<!--col-->';
   if (!st.total) return h + empty('하고 싶은 일을 하나씩 적어 보세요.<br>올해·내년·언젠가로 나눠 둘 수 있어요.');
-  ['올해', '내년', '언젠가'].forEach(w => {
-    const list = S.bucket.filter(x => !x.done && whenOf(x) === w);
-    if (list.length) h += '<section class="group"><div class="gh">' + w + ' <span class="hint">' + list.length + '개</span></div>' + list.map(x => listRow('bucket', x, ++num)).join('') + '</section>';
-  });
-  const dn = S.bucket.filter(x => x.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
-  if (dn.length) h += '<section class="group"><div class="gh">이룬 것 <span class="hint">' + dn.length + '개</span></div>' + dn.map(x => listRow('bucket', x, ++num)).join('') + '</section>';
+  if (f === 'open') {
+    ['올해', '내년', '언젠가'].forEach(w => {
+      const list = S.bucket.filter(x => !x.done && whenOf(x) === w);
+      if (list.length) h += '<section class="group"><div class="gh">' + w + ' <span class="hint">' + list.length + '개 · 번호를 누르면 순서를 바꿔요</span></div>' + list.map((x, i) => listRow('bucket', x, i + 1, list.length)).join('') + '</section>';
+    });
+    if (!st.open) h += empty('모두 이뤘어요!');
+  } else {
+    const dn = S.bucket.filter(x => x.done);
+    h += '<section class="group"><div class="gh">이룬 것 <span class="hint">' + dn.length + '개 · 번호를 누르면 순서를 바꿔요</span></div>' + (dn.length ? dn.map((x, i) => listRow('bucket', x, i + 1, dn.length)).join('') : '<div class="emptyrow">아직 이룬 것이 없어요.</div>') + '</section>';
+  }
   return h;
 }
 function viewWish() {
@@ -2383,7 +2413,7 @@ function sheetBucket(bid) {
     area('메모 (선택)', 'f-memo', cur ? cur.memo : '', 'maxlength="200" rows="3" placeholder="이유나 준비할 것을 적어 두세요"') +
     (exs.length ? '<div class="fld"><label>운동 기록과 연결 (선택)</label>' + chipsHtml('lex', [{ v: '', l: '연결 안 함' }].concat(exs.map(e => ({ v: e.id, l: e.name }))), vals.lex) + '<p class="fhint">기록이 목표에 닿으면 자동으로 이룬 것으로 바뀌어요.</p></div><div id="linkwrap">' + linkFieldsHtml(vals) + '</div>' : '') +
     '<div class="fld"><label>상태</label>' + chipsHtml('status', [{ v: 'open', l: '진행 중' }, { v: 'done', l: '이뤘어요' }], vals.status) + '</div>' +
-    '<div id="donewrap" style="display:' + (vals.status === 'done' ? 'block' : 'none') + '">' + field('이룬 날', 'f-date', 'date', cur && cur.doneAt ? cur.doneAt : t, 'max="' + t + '"') + '</div>' +
+    '<div id="donewrap" style="display:' + (vals.status === 'done' ? 'block' : 'none') + '">' + field('이룬 해 (연도)', 'f-year', 'text', cur && cur.doneYear ? cur.doneYear : (cur && cur.doneAt ? cur.doneAt.slice(0, 4) : t.slice(0, 4)), 'inputmode="numeric" maxlength="4" autocomplete="off" data-inp="year" placeholder="예: 2020"') + '</div>' +
     (cur ? delBtn('bucket|' + bid) : '') + ERR;
   openSheet(cur ? '버킷리스트 수정' : '버킷리스트 추가', body, () => {
     const title = val('f-title').trim();
@@ -2408,7 +2438,12 @@ function sheetBucket(bid) {
     rec.title = title; rec.memo = val('f-memo').trim(); rec.when = V.when; rec.link = link;
     rec.addedAt = val('f-added') || (cur ? cur.addedAt || null : t);
     rec.done = V.status === 'done';
-    rec.doneAt = rec.done ? (val('f-date') || t) : null;
+    if (rec.done) {
+      const y = parseInt(val('f-year'), 10), ty = +t.slice(0, 4);
+      if (!(y >= 1900 && y <= ty)) return setErr('이룬 해를 4자리 연도로 입력해 주세요. 예: 2020');
+      rec.doneYear = y;
+      rec.doneAt = cur && cur.doneAt && +cur.doneAt.slice(0, 4) === y ? cur.doneAt : (y === ty ? t : y + '-01-01');
+    } else { rec.doneAt = null; rec.doneYear = null; }
     if (!cur) S.bucket.push(rec);
     done();
   }, { vals: vals, focus: !cur, onPick: grp => {
@@ -2927,12 +2962,14 @@ const ACT = {
     S.settings.cats.forEach(c => { if (b.cats && b.cats[c.id] != null) c.monthly = b.cats[c.id]; });
     commit(); toast('기본 예산으로 저장했어요'); render();
   },
+  bucketFilter(arg) { NAV.bf = arg; render(); },
+  bucketNum(arg) { const p = arg.split('|'); numSheet('번호 바꾸기', '이 항목의 번호 (1~' + p[2] + ')', p[1], v => bucketMove(p[0], Math.round(v))); },
   addBucket() { sheetBucket(); }, editBucket(arg) { sheetBucket(arg); },
   addWish() { sheetWish(); }, editWish(arg) { sheetWish(arg); },
   tgBucket(arg) {
     const it = S.bucket.find(x => x.id === arg);
     if (!it) return;
-    it.done = !it.done; it.doneAt = it.done ? todayStr() : null;
+    it.done = !it.done; it.doneAt = it.done ? todayStr() : null; it.doneYear = it.done ? +todayStr().slice(0, 4) : null;
     commit(); toast(it.done ? '이뤘어요' : '다시 진행 중으로 바꿨어요'); render();
   },
   tgWish(arg) {
@@ -3052,6 +3089,7 @@ const INP = {
   runPrev(arg, el) { const c = el.id === 'f-val' ? decimal(el.value) : digits(el.value); if (c !== el.value) el.value = c; updateRunPreview(); },
   money(arg, el) { const d = String(el.value).replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''), f = d ? fmtN(Number(d), 0) : ''; if (f !== el.value) el.value = f; },
   timeFmt(arg, el) { const d = String(el.value).replace(/\D/g, '').slice(0, 4), f = d.length > 2 ? d.slice(0, 2) + ':' + d.slice(2) : d; if (f !== el.value) el.value = f; },
+  year(arg, el) { const c = String(el.value).replace(/\D/g, '').slice(0, 4); if (c !== el.value) el.value = c; },
   num(arg, el) { const c = decimal(el.value); if (c !== el.value) el.value = c; }
 };
 const CHG = {
@@ -3134,8 +3172,9 @@ function renderSide() {
 }
 function render(top) {
   LAYOUT = applyLayout();
-  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible(), tdc = syncTodos();
-  if (fixedChanged || got.length || bib || tdc) commit();
+  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible(), tdc = syncTodos(), bks = importBucketSeed();
+  if (fixedChanged || got.length || bib || tdc || bks) commit();
+  if (bks) toast('버킷리스트 ' + S.bucket.length + '개를 넣었어요');
   if (got.length) toast('버킷리스트를 이뤘어요: ' + got[0]);
   const v = byId('view');
   let html;
