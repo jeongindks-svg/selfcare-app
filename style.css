@@ -744,3 +744,7 @@ html[data-side] .desk{min-height:min(72vh,640px)}
 .tdn{border:0;outline:0;background:transparent;color:var(--text2);font:inherit;font-size:13px;min-height:34px;padding:0 8px;border-radius:8px;flex:0 1 34%;min-width:40px;width:34%}
 .tdn.has{background:var(--track2)}
 .tdn:focus{background:var(--inputbg);box-shadow:0 0 0 2px var(--link)}
+
+/* v29: 버킷리스트 번호 */
+button.lino{flex:none;min-width:32px;height:32px;margin:0 0 0 10px;padding:0 6px;border:0;border-radius:16px;background:var(--cbg);color:var(--ct);font-size:13px;font-weight:700}
+.lirow .lick{margin-left:0}
