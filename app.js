@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 30;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 31;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1642,19 +1642,25 @@ function listRow(kind, it, idx, total) {
     : (info ? esc(info.goal) + ' · ' + esc(info.text) : (it.memo ? esc(it.memo) : '')) + (bucket && it.addedAt ? (it.memo || info ? ' · ' : '') + '기록 ' + md(it.addedAt) : '') + (fit ? ' <span class="fit ' + fit + '">' + (fit === 'ok' ? '이번 달 예산 안' : '이번 달 예산 초과') + '</span>' : '');
   const price = !bucket && it.price > 0 ? '<span class="liprice">' + won(it.price) + '</span>' : '';
   const link = !bucket && safeUrl(it.link) ? '<a class="lilink" href="' + esc(it.link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(title) + ' 링크 열기">링크</a>' : '';
-  return '<div class="lirow c-' + kind + '">' + (idx ? '<button type="button" class="lino" data-act="bucketNum" data-arg="' + it.id + '|' + idx + '|' + total + '" aria-label="번호 ' + idx + ' 바꾸기">' + idx + '</button>' : '') + '<button type="button" class="lick" data-act="tg' + act + '" data-arg="' + it.id + '" aria-pressed="' + !!it.done + '" aria-label="' + esc(title) + (it.done ? ' 다시 진행 중으로' : (bucket ? ' 이뤘어요' : ' 구입했어요')) + '">' + (it.done ? DONE_SVG : TODO_SVG) + '</button>' +
+  return '<div class="lirow c-' + kind + '">' + (idx ? '<button type="button" class="lino" data-act="bucketNum" data-arg="' + it.id + '|' + idx + '" aria-label="번호 ' + idx + ' 바꾸기">' + idx + '</button>' : '') + '<button type="button" class="lick" data-act="tg' + act + '" data-arg="' + it.id + '" aria-pressed="' + !!it.done + '" aria-label="' + esc(title) + (it.done ? ' 다시 진행 중으로' : (bucket ? ' 이뤘어요' : ' 구입했어요')) + '">' + (it.done ? DONE_SVG : TODO_SVG) + '</button>' +
     '<button type="button" class="litext" data-act="edit' + act + '" data-arg="' + it.id + '"><span class="li1' + (it.done ? ' dn' : '') + '">' + esc(title) + '</span>' + (sub ? '<span class="li2">' + sub + '</span>' : '') + (info ? '<span class="lprog"><span style="width:' + info.pct.toFixed(0) + '%"></span></span>' : '') + '</button>' + link + price + '</div>';
 }
-const bucketSection = x => x.done ? 'done' : whenOf(x);
-function bucketMove(id, pos) {
+/* 번호는 항목마다 하나뿐인 고유번호예요. 진행 중이든 이룬 것이든 같은 번호표를 써요. */
+function ensureBucketNos() {
+  const seen = new Set(), need = [];
+  S.bucket.forEach(x => { if (x.no > 0 && !seen.has(x.no)) seen.add(x.no); else need.push(x); });
+  let n = seen.size ? Math.max.apply(null, Array.from(seen)) : 0;
+  need.forEach(x => { x.no = ++n; });
+  return need.length > 0;
+}
+function bucketSetNo(id, n) {
   const it = S.bucket.find(x => x.id === id);
   if (!it) return;
-  const sec = bucketSection(it), same = S.bucket.filter(x => bucketSection(x) === sec && x.id !== id);
-  pos = clamp(pos, 1, same.length + 1);
-  S.bucket = S.bucket.filter(x => x.id !== id);
-  if (pos > same.length) { const last = same[same.length - 1]; S.bucket.splice(last ? S.bucket.indexOf(last) + 1 : S.bucket.length, 0, it); }
-  else S.bucket.splice(S.bucket.indexOf(same[pos - 1]), 0, it);
+  const other = S.bucket.find(x => x.no === n && x.id !== id);
+  if (other) other.no = it.no;      // 이미 쓰는 번호면 서로 바꿔요
+  it.no = n;
 }
+const byNo = (a, b) => a.no - b.no;
 function viewBucket() {
   const st = bucketStats(), pct = st.total ? Math.round(100 * st.done / st.total) : 0, f = NAV.bf === 'done' ? 'done' : 'open';
   let h = backHdr('버킷리스트', 'flag', 'bucket', '') + '<div class="seg rangeseg" role="group" aria-label="보기">' + [['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div><!--cols-->';
@@ -1664,12 +1670,12 @@ function viewBucket() {
   if (f === 'open') {
     ['올해', '내년', '언젠가'].forEach(w => {
       const list = S.bucket.filter(x => !x.done && whenOf(x) === w);
-      if (list.length) h += '<section class="group"><div class="gh">' + w + ' <span class="hint">' + list.length + '개 · 번호를 누르면 순서를 바꿔요</span></div>' + list.map((x, i) => listRow('bucket', x, i + 1, list.length)).join('') + '</section>';
+      if (list.length) h += '<section class="group"><div class="gh">' + w + ' <span class="hint">' + list.length + '개 · 번호를 누르면 바꿔요</span></div>' + list.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') + '</section>';
     });
     if (!st.open) h += empty('모두 이뤘어요!');
   } else {
     const dn = S.bucket.filter(x => x.done);
-    h += '<section class="group"><div class="gh">이룬 것 <span class="hint">' + dn.length + '개 · 번호를 누르면 순서를 바꿔요</span></div>' + (dn.length ? dn.map((x, i) => listRow('bucket', x, i + 1, dn.length)).join('') : '<div class="emptyrow">아직 이룬 것이 없어요.</div>') + '</section>';
+    h += '<section class="group"><div class="gh">이룬 것 <span class="hint">' + dn.length + '개 · 번호를 누르면 바꿔요</span></div>' + (dn.length ? dn.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">아직 이룬 것이 없어요.</div>') + '</section>';
   }
   return h;
 }
@@ -2456,7 +2462,7 @@ function sheetBucket(bid) {
       rec.doneYear = y;
       rec.doneAt = cur && cur.doneAt && +cur.doneAt.slice(0, 4) === y ? cur.doneAt : (y === ty ? t : y + '-01-01');
     } else { rec.doneAt = null; rec.doneYear = null; }
-    if (!cur) S.bucket.push(rec);
+    if (!cur) { rec.no = S.bucket.reduce((m, x) => Math.max(m, x.no || 0), 0) + 1; S.bucket.push(rec); }
     done();
   }, { vals: vals, focus: !cur, onPick: grp => {
     if (grp === 'status') showDone(SHEET.vals.status);
@@ -2975,7 +2981,7 @@ const ACT = {
     commit(); toast('기본 예산으로 저장했어요'); render();
   },
   bucketFilter(arg) { NAV.bf = arg; render(); },
-  bucketNum(arg) { const p = arg.split('|'); numSheet('번호 바꾸기', '이 항목의 번호 (1~' + p[2] + ')', p[1], v => bucketMove(p[0], Math.round(v))); },
+  bucketNum(arg) { const p = arg.split('|'); numSheet('번호 바꾸기', '고유번호 (이미 쓰는 번호면 서로 바꿔요)', p[1], v => bucketSetNo(p[0], Math.max(1, Math.round(v)))); },
   addBucket() { sheetBucket(); }, editBucket(arg) { sheetBucket(arg); },
   addWish() { sheetWish(); }, editWish(arg) { sheetWish(arg); },
   tgBucket(arg) {
@@ -3184,8 +3190,8 @@ function renderSide() {
 }
 function render(top) {
   LAYOUT = applyLayout();
-  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible(), tdc = syncTodos(), bks = importBucketSeed();
-  if (fixedChanged || got.length || bib || tdc || bks) commit();
+  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible(), tdc = syncTodos(), bks = importBucketSeed(), bno = ensureBucketNos();
+  if (fixedChanged || got.length || bib || tdc || bks || bno) commit();
   if (bks) toast(bks === 'ko' ? '버킷리스트를 한국어로 바꿨어요' : '버킷리스트 ' + S.bucket.length + '개를 넣었어요');
   if (got.length) toast('버킷리스트를 이뤘어요: ' + got[0]);
   const v = byId('view');
