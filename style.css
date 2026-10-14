@@ -750,3 +750,11 @@ button.lino{flex:none;min-width:32px;height:32px;margin:0 0 0 10px;padding:0 6px
 .lirow .lick{margin-left:0}
 
 .okmark{display:inline-block;color:var(--ct);font-weight:800;margin-right:2px}
+
+/* v34: 실패 · 검색 · 정렬 */
+.tdck svg.fail circle,.lick svg.fail circle{fill:var(--bad)}
+.lirow.failed .li1{color:var(--bad)}
+.plfail{flex:none;border:0;background:var(--track2);color:var(--text2);border-radius:10px;min-height:34px;padding:0 10px;margin-right:8px;font-size:13px;font-weight:600}
+.lirow.failed .plfail{color:var(--link)}
+.searchbar .tin{width:100%;min-height:44px;border:0;border-radius:12px;background:var(--card);padding:0 14px;font-size:16px;color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+.sortchips{margin-bottom:2px}
