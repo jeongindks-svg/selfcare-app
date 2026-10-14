@@ -693,3 +693,30 @@ html[data-side] .card,html[data-side] .group{box-shadow:0 1px 3px rgba(0,0,0,.07
 .rb.late{background:var(--bad);color:#fff}
 .tdsnz{border:0;background:var(--track2);color:var(--text2);border-radius:10px;min-height:34px;padding:0 10px;font-size:13px;font-weight:600;flex:none}
 .rems{box-shadow:inset 3px 0 0 var(--blue)}
+
+/* v26: 폴더 · 할 일 색/비고 */
+.c-red{--c:#E5484D;--ct:#D03A3F;--cbg:rgba(229,72,77,.16);--cb:#C73B40}
+.folders{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:18px 10px;padding:4px 2px 8px}
+.fold{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:8px 4px 6px;border-radius:14px;color:inherit;min-width:0;transition:background .12s}
+.fold:hover{background:var(--track2)}
+.fold:active{background:var(--track)}
+.fico{position:relative;display:block;width:84px;height:66px}
+.fico > svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.18))}
+.fg svg{width:26px;height:26px}
+.fb{fill:var(--c);opacity:.72}.ff{fill:var(--c)}.fh{stroke:rgba(255,255,255,.4);stroke-width:1.5}
+.fg{position:absolute;left:0;right:0;top:24px;display:flex;justify-content:center;color:#fff}
+.fn1{font-size:14px;font-weight:600;line-height:1.25;word-break:keep-all}
+.fn2{font-size:12px;color:var(--sub);line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:700px){.folders{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:22px 14px}.fico{width:100px;height:78px}.fg{top:29px}}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.swt2{width:32px;height:32px;border-radius:50%;border:3px solid transparent;background:var(--c);box-shadow:inset 0 0 0 2px var(--card);padding:0}
+.swt2.on{border-color:var(--text)}
+.swt2.auto{background:conic-gradient(#F26A21,#2FA866,#2F7FEA,#A855F7,#E0568F,#F26A21)}
+.foldrow{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:0 12px;border:0;border-radius:12px;background:var(--inputbg);color:var(--text);font-size:15px;font-weight:500;text-align:left}
+.foldrow .fsum{margin-left:auto;color:var(--sub);font-size:14px;font-weight:400}
+.foldrow .chev{transition:transform .15s}.foldrow.open .chev{transform:rotate(90deg)}
+#linkpanel{margin-top:8px}
+.tdt .td1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.carry{font-style:normal;font-size:12px;color:var(--sub);flex:none}
+.tdn{flex:0 1 34%;min-width:30px;max-width:34%;min-height:34px;border:0;background:transparent;color:var(--sub);font:inherit;font-size:13px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px;border-radius:8px}
+.tdn.has{color:var(--text2);background:var(--track2)}
