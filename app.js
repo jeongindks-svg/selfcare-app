@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 26;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 27;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1005,10 +1005,10 @@ function paceChart(items) {
 
 /* ================= 화면 ================= */
 let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0 };
-const ROUTE_TITLE = { today: '오늘', cats: '분야', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
+const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
-  if (!top) return '분야';
+  if (!top) return '기록';
   if (top.route === 'ex') { const e = S.settings.exercises.find(x => x.id === top.arg); return e ? e.name : '운동'; }
   return ROUTE_TITLE[top.route] || '뒤로';
 }
@@ -1085,32 +1085,28 @@ function viewToday() {
 function hubRow(arg, icon, cls, name, sub) {
   return '<a href="#" class="hrw c-' + cls + '" data-act="go" data-arg="' + arg + '"><span class="hico2">' + ico(icon, 22, 2) + '</span><span class="hlt"><span class="h1">' + name + '</span><span class="h2">' + esc(sub) + '</span></span>' + CHEV + '</a>';
 }
-/* 분야: 맥의 폴더처럼 아이콘을 눌러서 들어가요 */
-function folder(arg, icon, cls, name, sub) {
-  return '<a href="#" class="fold c-' + cls + '" data-act="go" data-arg="' + arg + '" aria-label="' + esc(name) + ' 폴더 열기"><span class="fico"><svg viewBox="0 0 96 76" aria-hidden="true"><path class="fb" d="M6 14a8 8 0 0 1 8-8h22l8 9h38a8 8 0 0 1 8 8v43a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8z"/><path class="ff" d="M6 26a8 8 0 0 1 8-8h68a8 8 0 0 1 8 8v38a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8z"/><path class="fh" d="M10 24h76" fill="none"/></svg><span class="fg">' + ico(icon, 26, 2) + '</span></span><span class="fn1">' + esc(name) + '</span><span class="fn2">' + esc(sub) + '</span></a>';
+/* 기록: 컴퓨터 바탕화면처럼 아이콘을 눌러서 열어요 */
+function deskIcon(arg, icon, cls, name, sub) {
+  return '<a href="#" class="dicon c-' + cls + '" data-act="go" data-arg="' + arg + '" aria-label="' + esc(name) + ' 열기"><span class="dbox">' + ico(icon, 30, 1.9) + '</span><span class="dn1">' + esc(name) + '</span><span class="dn2">' + esc(sub) + '</span></a>';
 }
 function viewCats() {
-  const st = S.settings, rec = [], plan = [], lst = [];
+  const st = S.settings, list = [];
   if (st.show.exercise) {
     const ex = st.exercises;
-    let sub = '종목을 추가해 보세요';
-    if (ex.length) sub = ex[0].name + ' ' + exSummary(ex[0]).replace(/ · .*$/, '') + (ex.length > 1 ? ' 외 ' + (ex.length - 1) + '개' : '');
-    rec.push(folder('exlist', 'run', 'run', '운동', sub));
+    list.push(deskIcon('exlist', 'run', 'run', '운동', ex.length ? ex[0].name + ' ' + exSummary(ex[0]).replace(/ · .*$/, '').replace('평균 페이스 ', '') : '종목 추가'));
   }
-  if (st.show.sleep) {
-    const sl = sleepStats();
-    rec.push(folder('sleep', 'sleep', 'sleep', '수면', sl.avgDur == null ? '기록 없음' : '평균 ' + fmtDur(sl.avgDur)));
-  }
-  if (st.show.money) { const m = moneyStats(); rec.push(folder('money', 'money', 'money', '가계부', ymNow() + ' ' + won(m.month))); }
-  if (st.show.faith) { const w = wheelStats(); rec.push(folder('faith', 'faith', 'faith', '신앙', w.rate == null ? '항목을 켜 주세요' : '수레바퀴 ' + Math.round(w.rate * 100) + '%')); }
-  { const a = planSummary('week'), b2 = planSummary('month'), y = planSummary('year'), nr = S.reminders.filter(x => !x.done).length;
-    plan.push(folder('goals', 'flag', 'blue', '주간·월간 목표', '주 ' + a.done + '/' + a.n + ' · 월 ' + b2.done + '/' + b2.n));
-    plan.push(folder('yearly', 'trend', 'sleep', '연간 목표', y.n ? y.done + ' / ' + y.n + ' 달성' : '목표 없음'));
-    plan.push(folder('remind', 'bell', 'money', '알림', nr ? '예정 ' + nr + '개' : '없음')); }
-  if (st.show.bucket) { const b = bucketStats(); lst.push(folder('bucket', 'flag', 'bucket', '버킷리스트', b.total ? '이룬 ' + b.done + ' / ' + b.total : '비어 있음')); }
-  if (st.show.wish) { const w = wishStats(); lst.push(folder('wish', 'gift', 'wish', '위시리스트', w.total ? (w.open ? w.open + '개 · ' + won(w.sum) : '모두 구입') : '비어 있음')); }
-  const sec = (t, l) => l.length ? '<h2 class="gl2">' + t + '</h2><div class="folders">' + l.join('') + '</div>' : '';
-  return '<header class="hdr hrow2"><h1>분야</h1><a href="#" class="lnk big" data-act="go" data-arg="settings">설정</a></header>' + sec('기록', rec) + sec('계획', plan) + sec('리스트', lst);
+  if (st.show.sleep) { const sl = sleepStats(); list.push(deskIcon('sleep', 'sleep', 'sleep', '수면', sl.avgDur == null ? '기록 없음' : '평균 ' + fmtDur(sl.avgDur))); }
+  if (st.show.money) { const m = moneyStats(); list.push(deskIcon('money', 'money', 'money', '가계부', ymNow() + ' ' + won(m.month))); }
+  if (st.show.faith) { const w = wheelStats(); list.push(deskIcon('faith', 'faith', 'faith', '신앙', w.rate == null ? '항목 켜기' : '수레바퀴 ' + Math.round(w.rate * 100) + '%')); }
+  const a = planSummary('week'), b2 = planSummary('month'), y = planSummary('year'), nr = S.reminders.filter(x => !x.done).length;
+  list.push(deskIcon('goals', 'flag', 'blue', '목표', '주 ' + a.done + '/' + a.n + ' · 월 ' + b2.done + '/' + b2.n));
+  list.push(deskIcon('yearly', 'trend', 'sleep', '연간 목표', y.n ? y.done + ' / ' + y.n : '목표 없음'));
+  list.push(deskIcon('remind', 'bell', 'red', '알림', nr ? '예정 ' + nr + '개' : '없음'));
+  if (st.show.bucket) { const bk = bucketStats(); list.push(deskIcon('bucket', 'flag', 'bucket', '버킷리스트', bk.total ? '이룬 ' + bk.done + ' / ' + bk.total : '비어 있음')); }
+  if (st.show.wish) { const w = wishStats(); list.push(deskIcon('wish', 'gift', 'wish', '위시리스트', w.total ? (w.open ? w.open + '개' : '모두 구입') : '비어 있음')); }
+  const now = new Date();
+  return '<header class="hdr hrow2"><h1>기록</h1><a href="#" class="lnk big" data-act="go" data-arg="settings">설정</a></header>' +
+    '<section class="desk" aria-label="기록 바탕화면"><div class="deskbar"><span>기록</span><span>' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '</span></div><div class="dgrid">' + list.join('') + '</div></section>';
 }
 
 /* ---------- 운동 목록 ---------- */
@@ -3130,21 +3126,10 @@ function layout(html) {
   return head.replace(/<!--col-->/g, '') + '<div class="twocol"><div class="col">' + parts[0] + '</div><div class="col">' + parts.slice(1).join('') + '</div></div>';
 }
 function renderSide() {
-  const st = S.settings, cur = NAV.route;
-  const on = r => r === cur || (r === 'exlist' && cur === 'ex') || (r === 'money' && cur === 'mstat') || (r === 'growth' && cur === 'growthd');
+  const cur = NAV.route, tab = TAB_OF[cur];
+  const on = r => r === cur || (r === 'cats' && tab === 'cats') || (r === 'growth' && cur === 'growthd');
   const item = (r, t, ic) => '<a href="#" class="' + (on(r) ? 'on' : '') + '" data-act="go" data-arg="' + r + '" data-tab="' + r + '"' + (on(r) ? ' aria-current="page"' : '') + '>' + ico(ic, 22, 1.8) + t + '</a>';
-  let h = '<div class="sbrand">Growth</div>' + item('today', '오늘', 'today') + item('cal', '캘린더', 'cal') + item('goals', '목표', 'flag') + item('yearly', '연간 목표', 'trend') + item('remind', '알림', 'bell') + item('growth', 'Growth', 'trend') + item('review', '리뷰', 'review');
-  const rec = [];
-  if (st.show.exercise) rec.push(item('exlist', '운동', 'run'));
-  if (st.show.sleep) rec.push(item('sleep', '수면', 'sleep'));
-  if (st.show.money) rec.push(item('money', '가계부', 'money'));
-  if (st.show.faith) rec.push(item('faith', '신앙', 'faith'));
-  if (rec.length) h += '<div class="slab">기록</div>' + rec.join('');
-  const lst = [];
-  if (st.show.bucket) lst.push(item('bucket', '버킷리스트', 'flag'));
-  if (st.show.wish) lst.push(item('wish', '위시리스트', 'gift'));
-  if (lst.length) h += '<div class="slab">리스트</div>' + lst.join('');
-  return h + '<div class="sgrow"></div>' + item('settings', '설정', 'gear');
+  return '<div class="sbrand">Growth</div>' + item('today', '오늘', 'today') + item('cal', '캘린더', 'cal') + item('cats', '기록', 'grid') + item('growth', 'Growth', 'trend') + item('review', '리뷰', 'review') + '<div class="sgrow"></div>' + item('settings', '설정', 'gear');
 }
 function render(top) {
   LAYOUT = applyLayout();
