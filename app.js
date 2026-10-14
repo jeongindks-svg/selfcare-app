@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 21;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 22;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -436,8 +436,8 @@ function planPct(period) {
 }
 
 /* 오늘 할 일: 기록과 연결하면 체크할 때 바로 기록 창이 열리고, 기록하면 자동으로 완료돼요 */
-function todoLinkDone(l) {
-  const t = todayStr();
+function todoLinkDone(l, day) {
+  const t = day || todayStr();
   if (!l) return false;
   if (l.k === 'ex') return exSum(l.id, t) > 0;
   if (l.k === 'sleep') return !!sleepOn(t);
@@ -457,6 +457,18 @@ function todoDone(x) {
   if (x.link && todoLinkName(x.link)) return todoLinkDone(x.link);
   return x.daily ? !!(x.dn && x.dn[t]) : !!x.done;
 }
+function todoDoneOn(x, d) {
+  if (x.link && todoLinkName(x.link)) return todoLinkDone(x.link, d);
+  return x.daily ? !!(x.dn && x.dn[d]) : (!!x.done && x.doneAt === d);
+}
+/* 최근 4일 기록: ✓ 했음 · ✕ 못 함 · – 건너뜀 (만든 날 이전과 한 번만 하는 일은 비워 둬요) */
+function todoMark(x, d) {
+  if (x.sk && x.sk[d]) return 's';
+  if (!x.daily && !(x.link && todoLinkName(x.link))) return d === todayStr() ? (todoDoneOn(x, d) ? 'y' : 'n') : '';
+  if ((x.d || d) > d) return '';
+  return todoDoneOn(x, d) ? 'y' : 'n';
+}
+const todoDays = () => [0, 1, 2, 3].map(i => addDays(todayStr(), -i));
 const todoSkipped = x => !!(x.sk && x.sk[todayStr()]);
 function todoVisible(x) { const t = todayStr(); return x.daily || (x.done ? x.doneAt === t : (x.d || t) <= t); }
 function syncTodos() {
@@ -466,15 +478,16 @@ function syncTodos() {
   if (keep.length !== S.todos.length) { S.todos = keep; ch = true; }
   return ch;
 }
-function todoRow(x, mode) {
+const MARK = { y: '✓', n: '✕', s: '–' };
+const SKIP_SVG = '<svg class="sk" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="none" stroke-width="2"/><path d="M9 14h10" stroke-width="2.4" stroke-linecap="round"/></svg>';
+function todoRow(x) {
   const d = todoDone(x), sk = todoSkipped(x), ln = todoLinkName(x.link), lk = x.link && x.link.k;
   const cls = lk === 'ex' ? (S.settings.exercises.find(e => e.id === x.link.id) || {}).cls || 'blue' : ({ sleep: 'sleep', money: 'money', faith: 'faith', wheel: 'faith' }[lk] || 'blue');
-  const hint = ln && !d ? (lk === 'wheel' ? '체크하면 ' + ln + '에 기록돼요' : '체크하면 ' + ln + ' 창이 열려요') : ln;
-  const sub = sk ? '건너뜀' : [hint, x.daily ? '매일' : ''].filter(Boolean).join(' · ');
-  return '<div class="todo c-' + cls + (sk ? ' skipped' : '') + '"><button type="button" class="tdck" data-act="todoTg" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (d ? ' 완료' : ln ? ' 기록하러 가기' : ' 체크') + '">' + (d ? DONE_SVG : TODO_SVG) + '</button>' +
-    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1' + (d || sk ? ' dn' : '') + '">' + esc(x.title) + '</span>' + (sub ? '<span class="td2">' + esc(sub) + '</span>' : '') + '</button>' +
-    (mode === 'open' ? '<button type="button" class="tdskip" data-act="todoSkip" data-arg="' + x.id + '">건너뛰기</button>' : sk ? '<button type="button" class="tdskip" data-act="todoSkip" data-arg="' + x.id + '">되돌리기</button>' : '') + '</div>';
+  return '<div class="todo c-' + cls + (sk ? ' skipped' : '') + '"><button type="button" class="tdck" data-act="' + (sk ? 'todoSkip' : 'todoTg') + '" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (sk ? ' 건너뜀 취소' : d ? ' 완료' : ln ? ' 기록하러 가기' : ' 체크') + '">' + (sk ? SKIP_SVG : d ? DONE_SVG : TODO_SVG) + '</button>' +
+    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span></button>' +
+    '<span class="tdm" aria-hidden="true">' + todoDays().map(day => { const m = todoMark(x, day); return '<i class="mk ' + m + '">' + (MARK[m] || '') + '</i>'; }).join('') + '</span></div>';
 }
+function todoHead() { return '<div class="todo thead" aria-hidden="true"><span class="tdck"></span><span class="tdt"></span><span class="tdm">' + todoDays().map(d => '<i class="mk">' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</i>').join('') + '</span></div>'; }
 function planSummary(period) { const l = plansFor(period, planKey(period, 0)); return { n: l.length, done: l.filter(planDone).length }; }
 
 /* 버킷리스트 · 위시리스트 */
@@ -1043,11 +1056,10 @@ function viewToday() {
   const pcols = pcol('일간', dayPct, act.length ? dn.length + ' / ' + act.length + ' 완료' : '할 일 없음', '', '') +
     ['week', 'month', 'year'].map(per => { const v = planPct(per), q = planSummary(per); return pcol(PLAN_LABEL[per], v, q.n ? q.done + ' / ' + q.n + ' 달성' : '목표 세우기', per === 'year' ? 'go' : 'goPlan', per === 'year' ? 'yearly' : per); }).join('');
   const top = '<section class="card c-blue" aria-label="계획 달성률"><div class="sh2"><div class="a1b">계획 달성률</div><a href="#" class="lnk" data-act="go" data-arg="goals">목표 관리</a></div><div class="pcols">' + pcols + '</div></section>';
-  const todoCard = '<section class="group" aria-label="오늘 할 일"><div class="gh">오늘 할 일 <span class="hint">' + (act.length ? open.length + '개 남음' : '') + '</span></div>' +
-    (open.length ? open.map(x => todoRow(x, 'open')).join('') : '<div class="emptyrow">' + (tds.length ? '오늘 할 일을 모두 마쳤어요.' : '오늘 할 일을 적어 보세요. 러닝처럼 기록과 연결하면 체크할 때 바로 기록할 수 있어요.') + '</div>') +
+  const todoCard = '<section class="group" aria-label="오늘 할 일"><div class="gh">오늘 할 일</div>' + (open.length ? todoHead() + open.map(todoRow).join('') : '') +
     '<button type="button" class="addrow" data-act="addTodo">' + ico('plus', 18, 2) + '할 일 추가</button>' +
-    (S.todos.length ? '' : '<button type="button" class="addrow" data-act="todoSeed">추천 할 일 한 번에 넣기 (매일 반복)</button>') + '</section>' +
-    (dn.length || skd.length ? '<section class="group done" aria-label="완료한 일"><div class="gh">완료 <span class="hint">' + dn.length + '개' + (skd.length ? ' · 건너뜀 ' + skd.length : '') + '</span></div>' + dn.map(x => todoRow(x, 'done')).join('') + skd.map(x => todoRow(x, 'skip')).join('') + '</section>' : '');
+    (S.todos.length ? '' : '<button type="button" class="addrow" data-act="todoSeed">추천 할 일 넣기</button>') + '</section>' +
+    (dn.length || skd.length ? '<section class="group done" aria-label="완료한 일"><div class="gh">완료</div>' + dn.map(todoRow).join('') + skd.map(todoRow).join('') + '</section>' : '');
   return hdr('오늘', sub) + top + todoCard;
 }
 
@@ -1434,7 +1446,7 @@ function sheetTodo(tid) {
   const vals = { lk: cur ? linkStr(cur.link) : '', rep: cur && cur.daily ? 'daily' : 'once' };
   const body = field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝, 청소, 전화하기"') +
     '<div class="fld"><label>기록과 연결 (선택)</label>' + chipsHtml('lk', todoLinks(), vals.lk) + '<p class="fhint">운동·수면·가계부는 체크하면 그 기록 창이 열리고, 수레바퀴 항목은 체크하면 수레바퀴의 삶에 바로 기록돼요.</p></div>' +
-    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: '오늘만' }, { v: 'daily', l: '매일 반복' }], vals.rep) + '</div>' + (cur ? delBtn('todo|' + tid) : '') + ERR;
+    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: '오늘만' }, { v: 'daily', l: '매일 반복' }], vals.rep) + '</div>' + (cur ? '<button type="button" class="btn ghost" data-act="todoSkipSheet" data-arg="' + tid + '">' + (todoSkipped(cur) ? '오늘 건너뛰기 취소' : '오늘 건너뛰기') + '</button>' + delBtn('todo|' + tid) : '') + ERR;
   openSheet(cur ? '할 일 수정' : '할 일 추가', body, () => {
     const lk = SHEET.vals.lk, k = lk.split(':');
     let title = val('f-title').trim();
@@ -2670,6 +2682,7 @@ const ACT = {
     else { x.done = !x.done; x.doneAt = x.done ? t : null; }
     commit(); render();
   },
+  todoSkipSheet(arg) { ACT.todoSkip(arg); closeSheet(); },
   todoSkip(arg) { const x = S.todos.find(y => y.id === arg), t = todayStr(); if (!x) return; x.sk = x.sk || {}; if (x.sk[t]) delete x.sk[t]; else x.sk[t] = true; commit(); render(); },
   todoSeed() {
     const st = S.settings, add = (title, link) => S.todos.push({ id: 'td' + uid(), title: title, link: link, daily: true, d: todayStr(), done: false, doneAt: null, dn: {} });

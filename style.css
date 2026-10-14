@@ -606,3 +606,17 @@ html[data-fs="xl"] body{zoom:1.25}
 .tdskip{border:0;background:var(--track2);color:var(--text2);border-radius:10px;min-height:36px;padding:0 10px;font-size:13px;font-weight:600;flex:none}
 .todo.skipped .td1{color:var(--sub);text-decoration:none;font-style:italic}
 .lino{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;margin-right:8px;border-radius:12px;background:var(--cbg);color:var(--ct);font-size:13px;font-weight:700}
+
+/* v22: 할 일 — 습관 앱처럼 간결하게 */
+.todo{min-height:54px;gap:2px;padding-right:8px}
+.todo.thead{min-height:40px;border-top:0}
+.tdck svg.off circle{stroke:var(--c);stroke-width:2.5}
+.tdck svg.sk circle{stroke:var(--sub2)}.tdck svg.sk path{stroke:var(--sub2)}
+.td1{font-size:17px;font-weight:600;color:var(--ct);text-decoration:none!important}
+.todo.skipped .td1{color:var(--sub);font-style:normal}
+.tdm{display:flex;flex:none}
+.tdm .mk{width:34px;text-align:center;font-style:normal;font-size:17px;font-weight:700;color:var(--sub2);line-height:1.15}
+.tdm .mk.y{color:var(--ct)}.tdm .mk.s{color:var(--sub)}
+.thead .mk{font-size:12px;font-weight:600;color:var(--sub)}
+.tdskip,.td2{display:none}
+@media (max-width:360px){.tdm .mk{width:30px}}
