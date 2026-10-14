@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 23;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 24;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -452,12 +452,16 @@ function todoLinkName(l) {
   if (l.k === 'wheel') { const w = S.settings.wheel.find(x => x.id === l.id); return w ? '수레바퀴의 삶 · ' + w.name : ''; }
   return { sleep: '수면 기록', money: '가계부 입력', faith: '기도·말씀 기록' }[l.k] || '';
 }
+const todoCounted = x => x.target > 1 && !(x.link && todoLinkName(x.link));
+const todoCount = (x, d) => (x.cnt && x.cnt[d || todayStr()]) || 0;
 function todoDone(x) {
   const t = todayStr();
+  if (todoCounted(x)) return todoCount(x, t) >= x.target;
   if (x.link && todoLinkName(x.link)) return todoLinkDone(x.link);
   return x.daily ? !!(x.dn && x.dn[t]) : !!x.done;
 }
 function todoDoneOn(x, d) {
+  if (todoCounted(x)) return todoCount(x, d) >= x.target;
   if (x.link && todoLinkName(x.link)) return todoLinkDone(x.link, d);
   return x.daily ? !!(x.dn && x.dn[d]) : (!!x.done && x.doneAt === d);
 }
@@ -480,12 +484,14 @@ function syncTodos() {
 }
 const MARK = { y: '✓', n: '✕', s: '–' };
 const SKIP_SVG = '<svg class="sk" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="none" stroke-width="2"/><path d="M9 14h10" stroke-width="2.4" stroke-linecap="round"/></svg>';
+const PART_SVG = f => '<svg class="part" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle class="bg" cx="14" cy="14" r="12" fill="none" stroke-width="2.5"/><circle cx="14" cy="14" r="12" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="' + (f * 75.4).toFixed(1) + ' 75.4" transform="rotate(-90 14 14)"/></svg>';
 function todoRow(x) {
+  const cnt = todoCounted(x) ? todoCount(x) : -1;
   const d = todoDone(x), sk = todoSkipped(x), ln = todoLinkName(x.link), lk = x.link && x.link.k;
   const cls = lk === 'ex' ? (S.settings.exercises.find(e => e.id === x.link.id) || {}).cls || 'blue' : ({ sleep: 'sleep', money: 'money', faith: 'faith', wheel: 'faith' }[lk] || 'blue');
-  return '<div class="todo c-' + cls + (sk ? ' skipped' : '') + '"><button type="button" class="tdck" data-act="' + (sk ? 'todoSkip' : 'todoTg') + '" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (sk ? ' 건너뜀 취소' : d ? ' 완료' : ln ? ' 기록하러 가기' : ' 체크') + '">' + (sk ? SKIP_SVG : d ? DONE_SVG : TODO_SVG) + '</button>' +
-    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span></button>' +
-    '<span class="tdm" aria-hidden="true">' + todoDays().map(day => { const m = todoMark(x, day); return '<i class="mk ' + m + '">' + (MARK[m] || '') + '</i>'; }).join('') + '</span></div>';
+  return '<div class="todo c-' + cls + (sk ? ' skipped' : '') + '"><button type="button" class="tdck" data-act="' + (sk ? 'todoSkip' : 'todoTg') + '" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (sk ? ' 건너뜀 취소' : d ? ' 완료' : ln ? ' 기록하러 가기' : cnt >= 0 ? ' 한 번 더 (' + cnt + '/' + x.target + ')' : ' 체크') + '">' + (sk ? SKIP_SVG : d ? DONE_SVG : cnt > 0 ? PART_SVG(cnt / x.target) : TODO_SVG) + '</button>' +
+    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span>' + (cnt >= 0 ? '<span class="tdc">' + cnt + ' / ' + x.target + '</span>' : '') + '</button>' +
+    '<span class="tdm" aria-hidden="true">' + todoDays().map(day => { const m = todoMark(x, day); return '<i class="mk ' + m + '">' + (m === 'n' && todoCounted(x) && todoCount(x, day) > 0 ? todoCount(x, day) : (MARK[m] || '')) + '</i>'; }).join('') + '</span></div>';
 }
 function todoHead() { return '<div class="todo thead" aria-hidden="true"><span class="tdck"></span><span class="tdt"></span><span class="tdm">' + todoDays().map(d => '<i class="mk">' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</i>').join('') + '</span></div>'; }
 function planSummary(period) { const l = plansFor(period, planKey(period, 0)); return { n: l.length, done: l.filter(planDone).length }; }
@@ -1446,6 +1452,7 @@ function sheetTodo(tid) {
   const vals = { lk: cur ? linkStr(cur.link) : '', rep: cur && cur.daily ? 'daily' : 'once' };
   const body = field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝, 청소, 전화하기"') +
     '<div class="fld"><label>기록과 연결 (선택)</label>' + chipsHtml('lk', todoLinks(), vals.lk) + '<p class="fhint">운동·수면·가계부는 체크하면 그 기록 창이 열리고, 수레바퀴 항목은 체크하면 수레바퀴의 삶에 바로 기록돼요.</p></div>' +
+    '<div id="cntwrap" style="display:' + (vals.lk ? 'none' : 'block') + '">' + field('하루 목표 횟수 (선택)', 'f-cnt', 'number', cur && cur.target > 1 ? cur.target : '', 'inputmode="numeric" step="1" min="2" max="99" placeholder="예: 5 (체크할 때마다 1회씩 올라가요)"') + '</div>' +
     '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: '오늘만' }, { v: 'daily', l: '매일 반복' }], vals.rep) + '</div>' + (cur ? '<button type="button" class="btn ghost" data-act="todoSkipSheet" data-arg="' + tid + '">' + (todoSkipped(cur) ? '오늘 건너뛰기 취소' : '오늘 건너뛰기') + '</button>' + delBtn('todo|' + tid) : '') + ERR;
   openSheet(cur ? '할 일 수정' : '할 일 추가', body, () => {
     const lk = SHEET.vals.lk, k = lk.split(':');
@@ -1453,10 +1460,11 @@ function sheetTodo(tid) {
     if (!title && lk) { const w = k[0] === 'wheel' ? S.settings.wheel.find(x => x.id === k[1]) : null; title = w ? w.name : (todoLinks().find(x => x.v === lk) || {}).l || ''; }
     if (!title) return setErr('할 일을 입력해 주세요.');
     const rec = cur || { id: 'td' + uid(), d: todayStr(), done: false, doneAt: null, dn: {} };
+    rec.target = lk ? 0 : Math.min(99, Math.max(0, Math.round(parseFloat(val('f-cnt')) || 0))); if (rec.target < 2) rec.target = 0;
     rec.title = title; rec.link = lk ? ((k[0] === 'ex' || k[0] === 'wheel') ? { k: k[0], id: k[1] } : { k: k[0] }) : null; rec.daily = SHEET.vals.rep === 'daily';
     if (!cur) S.todos.push(rec);
     done();
-  }, { vals: vals, focus: !cur });
+  }, { vals: vals, focus: !cur, onPick: grp => { if (grp === 'lk') { const w = byId('cntwrap'); if (w) w.style.display = SHEET.vals.lk ? 'none' : 'block'; } } });
 }
 
 /* ---------- 목표 (주간·월간·연간) ---------- */
@@ -2535,7 +2543,7 @@ function mergeStates(a, b) {
     out.logs.faith[d] = n ? Object.assign({}, o, n, { done: Object.assign({}, o.done, n.done) }) : o;
   });
   unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans); unionById(out.todos, O.todos);
-  out.todos.forEach(x => { const o = O.todos.find(y => y.id === x.id); if (o) { x.dn = Object.assign({}, o.dn, x.dn); x.sk = Object.assign({}, o.sk, x.sk); } });
+  out.todos.forEach(x => { const o = O.todos.find(y => y.id === x.id); if (o) { x.dn = Object.assign({}, o.dn, x.dn); x.sk = Object.assign({}, o.sk, x.sk); x.cnt = Object.assign({}, o.cnt, x.cnt); } });
   out.theme = a.theme;
   out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
   return out;
@@ -2671,6 +2679,14 @@ const ACT = {
     const x = S.todos.find(y => y.id === arg), t = todayStr();
     if (!x) return;
     const ln = x.link ? todoLinkName(x.link) : '';
+    if (todoCounted(x)) {
+      x.cnt = x.cnt || {};
+      const c = todoCount(x, t);
+      if (c >= x.target) { x.cnt[t] = c - 1; if (!x.daily) { x.done = false; x.doneAt = null; } }
+      else { x.cnt[t] = c + 1; if (!x.daily && x.cnt[t] >= x.target) { x.done = true; x.doneAt = t; } }
+      if (!x.cnt[t]) delete x.cnt[t];
+      commit(); render(); return;
+    }
     if (ln && x.link.k === 'wheel') { ACT.wheelCell(x.link.id + '|' + t); return; }
     if (ln) {
       if (todoLinkDone(x.link)) { toast('기록이 있어서 완료예요'); return; }
