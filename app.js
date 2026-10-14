@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 32;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 33;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1640,7 +1640,7 @@ function listRow(kind, it, idx, total) {
   const info = bucket && !it.done ? bucketLinkInfo(it) : null;
   const fit = !bucket ? wishFit(it) : null;
   const dd = it.doneDate || (it.doneAt ? it.doneAt.replace(/-/g, '.') : '');
-  const sub = it.done ? (bucket ? (it.autoSeen ? '운동 기록으로 이뤘어요 · ' : '') + '<span class="okmark">✓</span> ' + esc(dd) : '구입한 날 ' + (it.doneAt ? md(it.doneAt) : ''))
+  const sub = it.done ? (bucket ? (it.autoSeen ? '운동 기록으로 이뤘어요 · ' : '') + esc(dd) : '구입한 날 ' + (it.doneAt ? md(it.doneAt) : ''))
     : (info ? esc(info.goal) + ' · ' + esc(info.text) : (it.memo ? esc(it.memo) : '')) + (bucket && it.addedAt ? (it.memo || info ? ' · ' : '') + '기록 ' + md(it.addedAt) : '') + (fit ? ' <span class="fit ' + fit + '">' + (fit === 'ok' ? '이번 달 예산 안' : '이번 달 예산 초과') + '</span>' : '');
   const price = !bucket && it.price > 0 ? '<span class="liprice">' + won(it.price) + '</span>' : '';
   const link = !bucket && safeUrl(it.link) ? '<a class="lilink" href="' + esc(it.link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(title) + ' 링크 열기">링크</a>' : '';
