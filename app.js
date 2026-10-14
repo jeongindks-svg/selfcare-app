@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 33;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 34;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -430,9 +430,20 @@ function planWhen(period, off) {
 }
 const plansFor = (period, pk) => S.plans.filter(x => x.period === period && x.pk === pk);
 const planDone = x => x.target > 0 ? x.cur >= x.target : !!x.done;
+/* 날짜 입력 (2020 · 2020.03 · 2020.03.15). 월·일은 몰라도 돼요. */
+function parseDoneDate(v, needFull) {
+  const d = String(v == null ? '' : v).replace(/\D/g, ''), t = todayStr();
+  if (!(d.length === 4 || d.length === 6 || d.length === 8) || (needFull && d.length !== 8)) return null;
+  const y = +d.slice(0, 4), mo = d.length >= 6 ? +d.slice(4, 6) : 0, dy = d.length === 8 ? +d.slice(6, 8) : 0;
+  if (!(y >= 1900 && y <= +t.slice(0, 4)) || (d.length >= 6 && !(mo >= 1 && mo <= 12)) || (d.length === 8 && !(dy >= 1 && dy <= 31))) return null;
+  const at = y + '-' + (mo ? PAD(mo) : '01') + '-' + (dy ? PAD(dy) : '01');
+  if (d.length === 8 && at > t) return null;
+  return { y: y, at: at, text: d.slice(0, 4) + (mo ? '.' + d.slice(4, 6) : '') + (dy ? '.' + d.slice(6, 8) : '') };
+}
+const planFailed = x => !!x.failed;
 function planPct(period) {
   const l = plansFor(period, planKey(period, 0));
-  return l.length ? Math.round(100 * sum(l.map(x => x.target > 0 ? Math.min(1, x.cur / x.target) : (x.done ? 1 : 0))) / l.length) : null;
+  return l.length ? Math.round(100 * sum(l.map(x => x.failed ? 0 : x.target > 0 ? Math.min(1, x.cur / x.target) : (x.done ? 1 : 0))) / l.length) : null;
 }
 
 /* 오늘 할 일: 기록과 연결하면 체크할 때 바로 기록 창이 열리고, 기록하면 자동으로 완료돼요 */
@@ -503,7 +514,7 @@ function todoRow(x) {
     '<span class="tdm" aria-hidden="true">' + todoDays().map(day => { const m = todoMark(x, day); return '<i class="mk ' + m + '">' + (m === 'n' && todoCounted(x) && todoCount(x, day) > 0 ? todoCount(x, day) : (MARK[m] || '')) + '</i>'; }).join('') + '</span></div>';
 }
 function todoHead() { return '<div class="todo thead" aria-hidden="true"><span class="tdck"></span><span class="tdt"></span><span class="tdm">' + todoDays().map(d => '<i class="mk">' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</i>').join('') + '</span></div>'; }
-function planSummary(period) { const l = plansFor(period, planKey(period, 0)); return { n: l.length, done: l.filter(planDone).length }; }
+function planSummary(period) { const l = plansFor(period, planKey(period, 0)); return { n: l.length, done: l.filter(x => planDone(x) && !x.failed).length, failed: l.filter(planFailed).length }; }
 
 /* 버킷리스트 · 위시리스트 */
 function bucketStats() { const done = S.bucket.filter(x => x.done).length; return { total: S.bucket.length, done: done, open: S.bucket.length - done }; }
@@ -657,7 +668,7 @@ function maybeAskFaithReset() {
 
 /* 성경 통독: 하루치를 읽으면 1, 이틀치를 읽으면 2를 기록해서 예상 완독일이 앞당겨져요 */
 const BIBLE_END = '2027-05-03';
-const dotDate = d => d.replace(/-/g, '.');
+const dotDate = d => String(d || '').replace(/-/g, '.');
 function ensureBible() {
   if (S.settings.bible) return false;
   S.settings.bible = { end: BIBLE_END, remaining0: Math.max(1, dayDiff(BIBLE_END, todayStr()) + 1) };
@@ -1034,7 +1045,7 @@ function paceChart(items) {
 }
 
 /* ================= 화면 ================= */
-let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0, bf: 'open' };
+let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'month', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0, bf: 'open', bq: '', bsort: 'no' };
 const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
@@ -1582,11 +1593,29 @@ function sheetTodo(tid) {
 }
 
 /* ---------- 목표 (주간·월간·연간) ---------- */
+const FAIL_SVG = '<svg class="fail" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13"/><path d="M9.5 9.5l9 9M18.5 9.5l-9 9" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"/></svg>';
 function planRow(x) {
-  const d = planDone(x), pct = x.target > 0 ? Math.min(100, x.cur / x.target * 100) : 0;
-  return '<div class="lirow c-blue"><button type="button" class="lick" data-act="planTg" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (d ? ' 다시 진행 중으로' : ' 달성')  + '">' + (d ? DONE_SVG : TODO_SVG) + '</button>' +
-    '<button type="button" class="litext" data-act="editPlan" data-arg="' + x.id + '"><span class="li1' + (d ? ' dn' : '') + '">' + esc(x.title) + '</span>' + (x.target > 0 ? '<span class="li2">' + fmtN(x.cur, 0) + ' / ' + fmtN(x.target, 0) + (x.unit ? ' ' + esc(x.unit) : '') + '</span><span class="lprog"><span style="width:' + pct.toFixed(0) + '%"></span></span>' : '') + '</button>' +
-    (x.target > 0 ? '<span class="plstep"><button type="button" data-act="planStep" data-arg="' + x.id + '|-1" aria-label="하나 줄이기">−</button><button type="button" class="plnum" data-act="planNum" data-arg="' + x.id + '" aria-label="숫자로 직접 입력">' + fmtN(x.cur, 0) + '</button><button type="button" data-act="planStep" data-arg="' + x.id + '|1" aria-label="하나 늘리기">+</button></span>' : '') + '</div>';
+  const f = planFailed(x), d = planDone(x) && !f, pct = x.target > 0 ? Math.min(100, x.cur / x.target * 100) : 0;
+  const meta = [];
+  if (x.target > 0) meta.push(fmtN(x.cur, 0) + ' / ' + fmtN(x.target, 0) + (x.unit ? ' ' + esc(x.unit) : ''));
+  if (f) meta.push('실패 ' + dotDate(x.failedAt)); else if (d && x.doneAt) meta.push('달성 ' + dotDate(x.doneAt));
+  return '<div class="lirow c-blue' + (f ? ' failed' : '') + '"><button type="button" class="lick" data-act="planTg" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (f ? ' 실패 취소' : d ? ' 다시 진행 중으로' : ' 달성') + '">' + (f ? FAIL_SVG : d ? DONE_SVG : TODO_SVG) + '</button>' +
+    '<button type="button" class="litext" data-act="editPlan" data-arg="' + x.id + '"><span class="li1' + (d || f ? ' dn' : '') + '">' + esc(x.title) + '</span>' + (meta.length ? '<span class="li2">' + meta.join(' · ') + '</span>' : '') + (x.target > 0 && !f ? '<span class="lprog"><span style="width:' + pct.toFixed(0) + '%"></span></span>' : '') + '</button>' +
+    (x.target > 0 && !f ? '<span class="plstep"><button type="button" data-act="planStep" data-arg="' + x.id + '|-1" aria-label="하나 줄이기">−</button><button type="button" class="plnum" data-act="planNum" data-arg="' + x.id + '" aria-label="숫자로 직접 입력">' + fmtN(x.cur, 0) + '</button><button type="button" data-act="planStep" data-arg="' + x.id + '|1" aria-label="하나 늘리기">+</button></span>' : '') +
+    (d ? '' : '<button type="button" class="plfail" data-act="planFail" data-arg="' + x.id + '">' + (f ? '되돌리기' : '실패') + '</button>') + '</div>';
+}
+/* 달성·실패를 체크할 때 날짜를 함께 적어요 (기본은 오늘) */
+function sheetPlanDate(x, kind) {
+  const fail = kind === 'fail', t = todayStr();
+  const body = '<p class="cmsg">‘' + esc(x.title) + '’ ' + (fail ? '실패한 날짜를 적어 주세요.' : '달성한 날짜를 적어 주세요.') + '</p>' +
+    field((fail ? '실패' : '달성') + ' 날짜 (연도.월.일)', 'f-ddate', 'text', dotDate(t), 'inputmode="numeric" maxlength="10" autocomplete="off" data-inp="ddate"') + ERR;
+  openSheet(fail ? '실패 날짜' : '달성 날짜', body, () => {
+    const pr = parseDoneDate(val('f-ddate'), true);
+    if (!pr) return setErr('연도.월.일을 모두 적어 주세요. 오늘이나 지난 날짜여야 해요. 예: ' + dotDate(t));
+    if (fail) { x.failed = true; x.failedAt = pr.at; x.done = false; }
+    else { x.failed = false; x.failedAt = null; if (x.target > 0) x.cur = Math.max(x.cur, x.target); else x.done = true; x.doneAt = pr.at; }
+    done(fail ? '실패로 기록했어요' : '달성했어요');
+  }, { focus: false });
 }
 function curPlan() {
   if (NAV.route === 'yearly') return { per: 'year', off: NAV.yoff || 0 };
@@ -1663,12 +1692,26 @@ function bucketSetNo(id, n) {
   it.no = n;
 }
 const byNo = (a, b) => a.no - b.no;
-function viewBucket() {
-  const st = bucketStats(), pct = st.total ? Math.round(100 * st.done / st.total) : 0, f = NAV.bf === 'done' ? 'done' : 'open';
-  let h = backHdr('버킷리스트', 'flag', 'bucket', '') + '<div class="seg rangeseg" role="group" aria-label="보기">' + [['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div><!--cols-->';
-  h += '<section class="card c-bucket"><div class="ml">이룬 것</div><div class="bigrow"><div class="big">' + st.done + '<span class="u">/ ' + st.total + '</span></div><div class="sm nm">' + pct + '%</div></div><div class="track"><div style="width:' + pct + '%"></div></div></section>';
-  h += bigBtn('addBucket', '', 'bucket', '버킷리스트 추가') + '<!--col-->';
-  if (!st.total) return h + empty('하고 싶은 일을 하나씩 적어 보세요.<br>올해·내년·언젠가로 나눠 둘 수 있어요.');
+function sheetAchieve(it) {
+  const t = todayStr();
+  const body = '<p class="cmsg">‘' + esc(it.title) + '’ 언제 이뤘나요?</p>' +
+    field('달성 날짜 (연도.월.일)', 'f-ddate', 'text', dotDate(t), 'inputmode="numeric" maxlength="10" autocomplete="off" data-inp="ddate" placeholder="예: 2020.07.06 (월·일을 몰라도 돼요)"') + ERR;
+  openSheet('이뤘어요', body, () => {
+    const pr = parseDoneDate(val('f-ddate'), false);
+    if (!pr) return setErr('연도 4자리, 필요하면 월·일까지 입력해 주세요. 예: 2020.07.06');
+    it.done = true; it.doneYear = pr.y; it.doneDate = pr.text; it.doneAt = pr.at;
+    done('이뤘어요');
+  }, { focus: false });
+}
+function bucketBody() {
+  const st = bucketStats(), q = String(NAV.bq || '').trim().toLowerCase();
+  if (!st.total) return empty('하고 싶은 일을 하나씩 적어 보세요.<br>올해·내년·언젠가로 나눠 둘 수 있어요.');
+  if (q) {
+    const list = S.bucket.filter(x => x.title.toLowerCase().indexOf(q) >= 0).sort(byNo);
+    return '<section class="group"><div class="gh">검색 결과 <span class="hint">' + list.length + '개</span></div>' + (list.length ? list.map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">찾는 항목이 없어요.</div>') + '</section>';
+  }
+  const f = NAV.bf === 'done' ? 'done' : 'open';
+  let h = '<div class="seg rangeseg" role="group" aria-label="보기">' + [['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   if (f === 'open') {
     ['올해', '내년', '언젠가'].forEach(w => {
       const list = S.bucket.filter(x => !x.done && whenOf(x) === w);
@@ -1676,9 +1719,19 @@ function viewBucket() {
     });
     if (!st.open) h += empty('모두 이뤘어요!');
   } else {
-    const dn = S.bucket.filter(x => x.done);
-    h += '<section class="group"><div class="gh">이룬 것 <span class="hint">' + dn.length + '개 · 번호를 누르면 바꿔요</span></div>' + (dn.length ? dn.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">아직 이룬 것이 없어요.</div>') + '</section>';
+    const so = NAV.bsort || 'no', key = x => x.doneAt || '';
+    const dn = S.bucket.filter(x => x.done).sort(so === 'new' ? (a, b) => key(b).localeCompare(key(a)) || a.no - b.no : so === 'old' ? (a, b) => key(a).localeCompare(key(b)) || a.no - b.no : byNo);
+    h += '<div class="chipsel sortchips" role="group" aria-label="정렬">' + [['no', '번호순'], ['new', '최근 날짜순'], ['old', '오래된 날짜순']].map(x => '<button type="button" class="cs' + (so === x[0] ? ' on' : '') + '" data-act="bucketSort" data-arg="' + x[0] + '" aria-pressed="' + (so === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
+      '<section class="group"><div class="gh">이룬 것 <span class="hint">' + dn.length + '개</span></div>' + (dn.length ? dn.map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">아직 이룬 것이 없어요.</div>') + '</section>';
   }
+  return h;
+}
+function viewBucket() {
+  const st = bucketStats(), pct = st.total ? Math.round(100 * st.done / st.total) : 0;
+  let h = backHdr('버킷리스트', 'flag', 'bucket', '');
+  h += '<div class="searchbar"><input type="search" id="bq" class="tin" value="' + esc(NAV.bq || '') + '" placeholder="버킷리스트 검색" autocomplete="off" enterkeyhint="search" aria-label="버킷리스트 검색" data-inp="bsearch"></div>';
+  h += '<section class="card c-bucket"><div class="ml">이룬 것</div><div class="bigrow"><div class="big">' + st.done + '<span class="u">/ ' + st.total + '</span></div><div class="sm nm">' + pct + '%</div></div><div class="track"><div style="width:' + pct + '%"></div></div></section>';
+  h += bigBtn('addBucket', '', 'bucket', '버킷리스트 추가') + '<div id="bres" class="stackc">' + bucketBody() + '</div>';
   return h;
 }
 function viewWish() {
@@ -2804,6 +2857,7 @@ const ACT = {
     if (p[0] === 'review') NAV.roff = 0;
     if (p[0] === 'cal') NAV.cal = { ym: '', sel: '' };
     if (p[0] === 'goals') NAV.goff = 0;
+    if (p[0] === 'bucket') NAV.bq = '';
     if (p[0] === 'yearly') NAV.yoff = 0;
     if (p[0] === 'mstat') NAV.stat = '';
     if (p[0] === 'money') { NAV.lm = ''; NAV.im = ''; }
@@ -2896,8 +2950,14 @@ const ACT = {
   planTg(arg) {
     const x = S.plans.find(y => y.id === arg);
     if (!x) return;
-    if (x.target > 0) x.cur = x.cur >= x.target ? 0 : x.target; else x.done = !x.done;
-    x.doneAt = planDone(x) ? todayStr() : null; commit(); render();
+    if (planFailed(x)) { x.failed = false; x.failedAt = null; commit(); render(); return; }
+    if (planDone(x)) { if (x.target > 0) x.cur = 0; else x.done = false; x.doneAt = null; commit(); render(); return; }
+    sheetPlanDate(x, 'done');
+  },
+  planFail(arg) {
+    const x = S.plans.find(y => y.id === arg);
+    if (!x) return;
+    if (planFailed(x)) { x.failed = false; x.failedAt = null; commit(); render(); } else sheetPlanDate(x, 'fail');
   },
   planStep(arg) { const p = arg.split('|'), x = S.plans.find(y => y.id === p[0]); if (!x) return; x.cur = Math.max(0, x.cur + Number(p[1])); x.doneAt = planDone(x) ? todayStr() : null; commit(); render(); },
   planCarry() {
@@ -2990,9 +3050,11 @@ const ACT = {
   tgBucket(arg) {
     const it = S.bucket.find(x => x.id === arg);
     if (!it) return;
-    it.done = !it.done; it.doneAt = it.done ? todayStr() : null; it.doneYear = it.done ? +todayStr().slice(0, 4) : null; it.doneDate = it.done ? todayStr().replace(/-/g, '.') : null;
-    commit(); toast(it.done ? '이뤘어요' : '다시 진행 중으로 바꿨어요'); render();
+    if (!it.done) { sheetAchieve(it); return; }
+    it.done = false; it.doneAt = null; it.doneYear = null; it.doneDate = null;
+    commit(); toast('다시 진행 중으로 바꿨어요'); render();
   },
+  bucketSort(arg) { NAV.bsort = arg; render(); },
   tgWish(arg) {
     const it = S.wish.find(x => x.id === arg);
     if (!it) return;
@@ -3112,6 +3174,7 @@ const INP = {
   timeFmt(arg, el) { const d = String(el.value).replace(/\D/g, '').slice(0, 4), f = d.length > 2 ? d.slice(0, 2) + ':' + d.slice(2) : d; if (f !== el.value) el.value = f; },
   year(arg, el) { const c = String(el.value).replace(/\D/g, '').slice(0, 4); if (c !== el.value) el.value = c; },
   ddate(arg, el) { const d = String(el.value).replace(/\D/g, '').slice(0, 8), f = d.length > 6 ? d.slice(0, 4) + '.' + d.slice(4, 6) + '.' + d.slice(6) : d.length > 4 ? d.slice(0, 4) + '.' + d.slice(4) : d; if (f !== el.value) el.value = f; },
+  bsearch(arg, el) { NAV.bq = el.value; const r = byId('bres'); if (r) r.innerHTML = bucketBody(); },
   num(arg, el) { const c = decimal(el.value); if (c !== el.value) el.value = c; }
 };
 const CHG = {
