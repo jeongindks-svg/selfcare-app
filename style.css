@@ -748,3 +748,5 @@ html[data-side] .desk{min-height:min(72vh,640px)}
 /* v29: 버킷리스트 번호 */
 button.lino{flex:none;min-width:32px;height:32px;margin:0 0 0 10px;padding:0 6px;border:0;border-radius:16px;background:var(--cbg);color:var(--ct);font-size:13px;font-weight:700}
 .lirow .lick{margin-left:0}
+
+.okmark{display:inline-block;color:var(--ct);font-weight:800;margin-right:2px}
