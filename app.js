@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 27;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 28;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -499,7 +499,7 @@ function todoRow(x) {
   const d = todoDone(x), sk = todoSkipped(x), ln = todoLinkName(x.link), lk = x.link && x.link.k;
   const cls = tdColor(x), note = (x.nt && x.nt[todayStr()]) || '';
   return '<div class="todo c-' + cls + (sk ? ' skipped' : '') + '"><button type="button" class="tdck" data-act="' + (sk ? 'todoSkip' : 'todoTg') + '" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (sk ? ' 건너뜀 취소' : d ? ' 완료' : ln ? ' 기록하러 가기' : cnt >= 0 ? ' 한 번 더 (' + cnt + '/' + x.target + ')' : ' 체크') + '">' + (sk ? SKIP_SVG : d ? DONE_SVG : cnt > 0 ? PART_SVG(cnt / x.target) : TODO_SVG) + '</button>' +
-    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span>' + (!x.daily && !d && !sk && (x.d || '') < todayStr() ? '<i class="carry" title="이월">↪</i>' : '') + '</button>' + '<button type="button" class="tdn' + (note ? ' has' : '') + '" data-act="todoNote" data-arg="' + x.id + '" aria-label="비고">' + (note ? esc(note) : ico('edit', 14, 2)) + '</button>' + (cnt >= 0 ? '<button type="button" class="tdc" data-act="todoNum" data-arg="' + x.id + '" aria-label="횟수 직접 입력">' + cnt + ' / ' + x.target + '</button>' : '') +
+    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span>' + (!x.daily && !d && !sk && (x.d || '') < todayStr() ? '<i class="carry" title="이월">↪</i>' : '') + '</button>' + '<input type="text" class="tdn' + (note ? ' has' : '') + '" value="' + esc(note) + '" maxlength="60" autocomplete="off" enterkeyhint="done" data-chg="tdNote" data-arg="' + x.id + '" aria-label="' + esc(x.title) + ' 비고">' + (cnt >= 0 ? '<button type="button" class="tdc" data-act="todoNum" data-arg="' + x.id + '" aria-label="횟수 직접 입력">' + cnt + ' / ' + x.target + '</button>' : '') +
     '<span class="tdm" aria-hidden="true">' + todoDays().map(day => { const m = todoMark(x, day); return '<i class="mk ' + m + '">' + (m === 'n' && todoCounted(x) && todoCount(x, day) > 0 ? todoCount(x, day) : (MARK[m] || '')) + '</i>'; }).join('') + '</span></div>';
 }
 function todoHead() { return '<div class="todo thead" aria-hidden="true"><span class="tdck"></span><span class="tdt"></span><span class="tdm">' + todoDays().map(d => '<i class="mk">' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</i>').join('') + '</span></div>'; }
@@ -3072,6 +3072,7 @@ const CHG = {
     sheetSleep(v, { bed: parseHM(val('f-bed')) || '23:30', wake: parseHM(val('f-wake')) || '07:00', score: SHEET.vals.score });
   },
   timeNorm(arg, v, el) { const n = parseHM(v); if (n && el) el.value = n; },
+  tdNote(arg, v) { const x = S.todos.find(y => y.id === arg), t = todayStr(); if (!x) return; x.nt = x.nt || {}; const n = String(v).trim(); if (n) x.nt[t] = n; else delete x.nt[t]; commit(); render(); },
   renWheel(arg, v) { const w = S.settings.wheel.find(x => x.id === arg); if (w && v.trim()) w.name = v.trim(); commit(); render(); },
   renFaith(arg, v) { const f = S.settings.faith.find(x => x.id === arg); if (f && v.trim()) f.name = v.trim(); commit(); render(); }
 };

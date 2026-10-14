@@ -734,3 +734,13 @@ html[data-side] .card,html[data-side] .group{box-shadow:0 1px 3px rgba(0,0,0,.07
 @media (min-width:700px){.dgrid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:26px 8px;padding:30px 24px 36px}.dbox{width:72px;height:72px;border-radius:19px}.dn1{font-size:14px}.dn2{font-size:12px}}
 html[data-side] .onecol:has(> .desk){max-width:none}
 html[data-side] .desk{min-height:min(72vh,640px)}
+
+/* v28: 물결 바탕화면 · 비고 입력 */
+.desk{background:#e2efec url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%201200%20800%27%20preserveAspectRatio=%27xMidYMid%20slice%27%3E%3Cdefs%3E%3Cfilter%20id=%27s%27%20x=%27-5%25%27%20y=%27-10%25%27%20width=%27110%25%27%20height=%27120%25%27%3E%3CfeDropShadow%20dx=%270%27%20dy=%27-5%27%20stdDeviation=%279%27%20flood-color=%27%2308303c%27%20flood-opacity=%27.32%27/%3E%3C/filter%3E%3C/defs%3E%3Crect%20width=%271200%27%20height=%27800%27%20fill=%27%23e2efec%27/%3E%3Cpath%20filter=%27url(%23s)%27%20fill=%27%23a9d6cf%27%20d=%27M0%20190C180%20100%20340%20110%20520%20175S880%20255%201200%20130V800H0Z%27/%3E%3Cpath%20filter=%27url(%23s)%27%20fill=%27%234d9c9d%27%20d=%27M0%20380C200%20290%20380%20310%20560%20372S900%20462%201200%20320V800H0Z%27/%3E%3Cpath%20filter=%27url(%23s)%27%20fill=%27%23236e7c%27%20d=%27M0%20535C220%20465%20420%20485%20640%20555S980%20635%201200%20495V800H0Z%27/%3E%3Cpath%20filter=%27url(%23s)%27%20fill=%27%230d2e42%27%20d=%27M0%20685C260%20635%20480%20645%20700%20705S1000%20755%201200%20645V800H0Z%27/%3E%3C/svg%3E") center/cover no-repeat;box-shadow:0 6px 22px rgba(10,50,60,.25)}
+.deskbar{background:rgba(255,255,255,.55);color:#0e2f3a}
+.dn1,.dn2{text-shadow:none;background:rgba(8,40,54,.58);color:#fff;border-radius:9px;padding:1px 8px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.dn2{background:rgba(8,40,54,.42);font-size:11px;margin-top:-2px}
+.dicon:hover{background:rgba(255,255,255,.22)}
+.tdn{border:0;outline:0;background:transparent;color:var(--text2);font:inherit;font-size:13px;min-height:34px;padding:0 8px;border-radius:8px;flex:0 1 34%;min-width:40px;width:34%}
+.tdn.has{background:var(--track2)}
+.tdn:focus{background:var(--inputbg);box-shadow:0 0 0 2px var(--link)}
