@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 22;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 23;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1060,7 +1060,7 @@ function viewToday() {
     '<button type="button" class="addrow" data-act="addTodo">' + ico('plus', 18, 2) + '할 일 추가</button>' +
     (S.todos.length ? '' : '<button type="button" class="addrow" data-act="todoSeed">추천 할 일 넣기</button>') + '</section>' +
     (dn.length || skd.length ? '<section class="group done" aria-label="완료한 일"><div class="gh">완료</div>' + dn.map(todoRow).join('') + skd.map(todoRow).join('') + '</section>' : '');
-  return hdr('오늘', sub) + top + todoCard;
+  return hdr('오늘', sub) + top + '<!--cols-->' + todoCard.split('<section class="group done"')[0] + '<!--col-->' + (todoCard.indexOf('<section class="group done"') >= 0 ? '<section class="group done"' + todoCard.split('<section class="group done"')[1] : '');
 }
 
 /* ---------- 분야 (목록) ---------- */
@@ -1804,7 +1804,7 @@ function viewSettings() {
   if (ls) h += glabel('분야별 설정') + '<section class="group">' + ls + '</section>';
   const vp = viewportSize();
   h += '<!--col-->' + glabel('화면') + '<div class="seg" role="group" aria-label="화면 모드">' + [['auto', '자동'], ['light', '라이트'], ['dark', '다크']].map(x => '<button type="button" data-act="theme" data-arg="' + x[0] + '" aria-pressed="' + (S.theme === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
-  h += glabel('글자 크기 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="글자 크기">' + [['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']].map(x => '<button type="button" data-act="fontSize" data-arg="' + x[0] + '" aria-pressed="' + (FONT_SIZE === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+  h += glabel('글자 크기 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="글자 크기">' + [['sm', '작게'], ['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']].map(x => '<button type="button" data-act="fontSize" data-arg="' + x[0] + '" aria-pressed="' + (FONT_SIZE === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   h += glabel('화면 배치 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="화면 배치">' + [['auto', '자동'], ['phone', '폰'], ['tablet', '태블릿']].map(x => '<button type="button" data-act="layoutPref" data-arg="' + x[0] + '" aria-pressed="' + (LAYOUT_PREF === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<p class="subline">지금 화면 크기 ' + vp.w + ' × ' + vp.h + ' · ' + LAYOUT_NAME[LAYOUT] + '</p>' +
     '<p class="subline">앱 버전 ' + APP_VERSION + ' · ' + (isStandalone() ? '설치한 앱' : '브라우저') + (deviceOrientation() ? ' · 기기 방향 ' + deviceOrientation() : '') + '</p>';
@@ -2938,9 +2938,9 @@ function applyTheme() {
   if (S.theme === 'dark' || S.theme === 'light') r.setAttribute('data-theme', S.theme); else r.removeAttribute('data-theme');
 }
 const FS_KEY = 'selfapp.fs';
-let FONT_SIZE = 'md';
-function applyFont() { const r = document.documentElement; if (FONT_SIZE === 'md') r.removeAttribute('data-fs'); else r.setAttribute('data-fs', FONT_SIZE); }
-function loadFont() { try { const v = localStorage.getItem(FS_KEY); if (v === 'lg' || v === 'xl' || v === 'md') FONT_SIZE = v; } catch (e) { /* 기본값 사용 */ } applyFont(); }
+let FONT_SIZE = 'sm';
+function applyFont() { document.documentElement.setAttribute('data-fs', FONT_SIZE); }
+function loadFont() { try { const v = localStorage.getItem(FS_KEY); if (v === 'sm' || v === 'lg' || v === 'xl' || v === 'md') FONT_SIZE = v; } catch (e) { /* 기본값 사용 */ } applyFont(); }
 let LAST = null, LAYOUT = 'phone';
 /* 화면 배치: phone(한 줄 + 아래 탭) / wide(사이드 메뉴 + 넓은 한 줄) / two(사이드 메뉴 + 2단)
    창의 실제 크기로 정해요. 태블릿에서 자동 판단이 안 맞으면 설정에서 직접 고를 수 있어요(이 기기에만 저장). */
