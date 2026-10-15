@@ -865,3 +865,10 @@ html[data-side] .bkhero{height:300px}
 .bkpage .lick svg.on circle{fill:#5f9b8f}
 .bkpage .lprog{background:rgba(255,255,255,.12)}.bkpage .lprog span{background:#6fae9d}
 .bkpage .emptyrow,.bkpage .emptyc{color:rgba(255,255,255,.55)}
+
+/* v39: 할 일 제목이 먼저 · 비고는 작게 */
+.tdt{flex:1 1 0;min-width:0}
+.tdt .td1{white-space:normal;overflow:hidden;text-overflow:initial;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:keep-all;overflow-wrap:anywhere;line-height:1.3}
+.todo .tdn{flex:0 0 auto;width:68px;min-width:0;max-width:68px}
+@media (min-width:700px){.todo .tdn{width:140px;max-width:140px}}
+@media (max-width:600px){.todo .tdn{width:52px;max-width:52px;padding:0 4px;font-size:12px}.tdm .mk{width:26px}.todo .tdt .td1{font-size:16px}}
