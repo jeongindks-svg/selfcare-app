@@ -843,3 +843,25 @@ html[data-side] .bkhero{height:300px}
 .swt2.c-red,.swt2.c-run,.swt2.c-money,.swt2.c-push,.swt2.c-bucket,.swt2.c-blue,.swt2.c-sleep,.swt2.c-wish,.swt2.c-faith{background:var(--tr)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .todo:not(.thead){border-top-color:rgba(255,255,255,.08)}:root:not([data-theme="light"]) .todo .tdn.has{background:rgba(255,255,255,.12)}}
 :root[data-theme="dark"] .todo:not(.thead){border-top-color:rgba(255,255,255,.08)}:root[data-theme="dark"] .todo .tdn.has{background:rgba(255,255,255,.12)}
+
+/* v37: 버킷리스트 목록은 한층 차분하게 (위쪽 히어로는 그대로) */
+.bkpage{background:linear-gradient(180deg,#14404e 0,#0d2539 30%,#0a1829 100%)}
+.bkpage .searchbar .tin{background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.bkadd{background:linear-gradient(90deg,#2b7b78,#3b62a3)!important}
+.bkpage .seg{background:rgba(255,255,255,.07)}
+.bkpage .seg button{color:rgba(255,255,255,.7)}
+.bkpage .seg button[aria-pressed="true"]{background:rgba(255,255,255,.15);color:#fff}
+.bkpage .cs{background:rgba(255,255,255,.07);color:rgba(255,255,255,.8)}
+.bkpage .cs.on{background:#477f80;color:#fff}
+.bkpage .group{background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);-webkit-backdrop-filter:none;backdrop-filter:none}
+.bkpage .gh{color:rgba(255,255,255,.6);border-bottom-color:rgba(255,255,255,.07)}
+.bkpage .gh .hint{color:rgba(255,255,255,.4)}
+.bkpage .lirow{border-top-color:rgba(255,255,255,.06)}
+.bkpage .li1{color:#e6edf4}
+.bkpage .li1.dn{color:rgba(230,237,244,.5);text-decoration-color:rgba(230,237,244,.28)}
+.bkpage .li2{color:rgba(230,237,244,.45)}
+.bkpage button.lino{background:rgba(255,255,255,.07);color:#a9bccd;font-weight:600}
+.bkpage .lick svg.off circle{stroke:rgba(255,255,255,.34)}
+.bkpage .lick svg.on circle{fill:#5f9b8f}
+.bkpage .lprog{background:rgba(255,255,255,.12)}.bkpage .lprog span{background:#6fae9d}
+.bkpage .emptyrow,.bkpage .emptyc{color:rgba(255,255,255,.55)}
