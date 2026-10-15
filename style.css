@@ -832,17 +832,17 @@ html[data-side] .bkhero{height:300px}
 :root[data-theme="dark"] .todo.c-wish,:root[data-theme="dark"] .swt2.c-wish{--tb:rgba(221,189,255,0.14);--tr:#DDBDFF;--tt:#DDBDFF}
 :root[data-theme="dark"] .todo.c-faith,:root[data-theme="dark"] .swt2.c-faith{--tb:rgba(255,185,214,0.14);--tr:#FFB9D6;--tt:#FFB9D6}
 
-.todo:not(.thead){background:var(--tb,transparent);border-top-color:rgba(255,255,255,.55)}
+
 .todo.skipped{--tb:transparent}
 .tdck svg.off circle{stroke:var(--tr,var(--sub2))}
 .tdck svg.on circle{fill:var(--tr,var(--cb))}
 .tdck svg.part circle{stroke:var(--tr,var(--c))}
-.td1{color:var(--tt,var(--text))}
-.tdm .mk.y{color:var(--tt,var(--ct))}
-.todo .tdn.has{background:rgba(255,255,255,.65);color:var(--tt,var(--text2))}
+.td1{color:var(--text)}.todo.skipped .td1{color:var(--sub)}.td1.dn{color:var(--sub)}
+.tdm .mk.y{color:var(--text2)}
+
 .swt2.c-red,.swt2.c-run,.swt2.c-money,.swt2.c-push,.swt2.c-bucket,.swt2.c-blue,.swt2.c-sleep,.swt2.c-wish,.swt2.c-faith{background:var(--tr)}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .todo:not(.thead){border-top-color:rgba(255,255,255,.08)}:root:not([data-theme="light"]) .todo .tdn.has{background:rgba(255,255,255,.12)}}
-:root[data-theme="dark"] .todo:not(.thead){border-top-color:rgba(255,255,255,.08)}:root[data-theme="dark"] .todo .tdn.has{background:rgba(255,255,255,.12)}
+
+
 
 /* v37: 버킷리스트 목록은 한층 차분하게 (위쪽 히어로는 그대로) */
 .bkpage{background:linear-gradient(180deg,#14404e 0,#0d2539 30%,#0a1829 100%)}

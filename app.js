@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 37;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 38;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -755,46 +755,6 @@ function insightsFor(tag, max) {
   return crossInsights().filter(r => r.ready && r.strong && r.tags.indexOf(tag) >= 0).sort((x, y) => y.mag - x.mag).slice(0, max || 1);
 }
 
-/* ---- 버킷리스트 ↔ 운동 기록 ---- */
-function bucketLinkInfo(it) {
-  const L = it.link;
-  if (!L) return null;
-  const e = S.settings.exercises.find(x => x.id === L.ex);
-  if (!e) return null;
-  const entries = (S.logs.ex[e.id] || []).slice().sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
-  if (L.type === 'dist') {
-    const cur = maxOf(entries.map(r => r.v));
-    const hit = entries.find(r => r.v >= L.target);
-    return { e: e, pct: Math.min(100, cur / L.target * 100), text: '지금 최고 ' + exVal(cur, e) + ' / 목표 ' + exVal(L.target, e), goal: '한 번에 ' + exVal(L.target, e), done: !!hit, date: hit ? hit.d : null };
-  }
-  if (L.type === 'day') {
-    const o = ix().ex[e.id] || {};
-    const days = Object.keys(o).sort();
-    const cur = maxOf(days.map(d => o[d]));
-    const hit = days.find(d => o[d] >= L.target);
-    return { e: e, pct: Math.min(100, cur / L.target * 100), text: '하루 최고 ' + exVal(cur, e) + ' / 목표 ' + exVal(L.target, e), goal: '하루 ' + exVal(L.target, e), done: !!hit, date: hit || null };
-  }
-  if (L.type === 'time') {
-    const D = RUN_DISTS.find(x => Math.abs(x.d - L.dist) < 0.01);
-    if (!D) return null;
-    const tm = L.sec / 60;
-    const cand = timedRuns(e).filter(r => r.v >= D.d * 0.9 && r.v <= D.d * 1.1).map(r => ({ d: r.d, t: r.m * D.d / r.v })).sort((a, b) => a.d < b.d ? -1 : 1);
-    const best = cand.length ? Math.min.apply(null, cand.map(r => r.t)) : null;
-    const hit = cand.find(r => r.t <= tm + 1e-9);
-    return { e: e, pct: best == null ? 0 : Math.min(100, tm / best * 100), text: best == null ? '아직 ' + D.label + ' 기록이 없어요' : '지금 최고 ' + fmtRec(best) + ' / 목표 ' + fmtRec(tm), goal: D.label + ' ' + fmtRec(tm) + ' 이내', done: !!hit, date: hit ? hit.d : null };
-  }
-  return null;
-}
-/* 운동 기록이 목표에 닿으면 버킷리스트를 자동으로 이뤄요 (한 번만) */
-function applyBucketLinks() {
-  const got = [];
-  S.bucket.forEach(it => {
-    if (!it.link || it.done || it.autoSeen) return;
-    const info = bucketLinkInfo(it);
-    if (info && info.done) { it.done = true; it.doneAt = info.date || todayStr(); it.doneYear = +it.doneAt.slice(0, 4); it.doneDate = it.doneAt.replace(/-/g, '.'); it.autoSeen = true; got.push(it.title); }
-  });
-  return got;
-}
 /* 위시리스트 ↔ 가계부: 이번 달 남은 예산 안에서 살 수 있는지 */
 function wishFit(it) {
   if (!S.settings.show.money || it.done || !(it.price > 0)) return null;
@@ -1238,13 +1198,6 @@ function linkSection(tag, max) {
   if (!list.length) return '';
   return '<section><div class="sh"><h2>다른 분야와의 연결</h2><a href="#" class="lnk" data-act="go" data-arg="review">리뷰</a></div><div class="stackc">' + list.map(insightCard).join('') + '</div><p class="foot">최근 8주 기록 기준 · 원인이 아니라 함께 나타난 경향이에요.</p></section>';
 }
-function bucketGoalsFor(e) {
-  if (!S.settings.show.bucket) return '';
-  const goals = S.bucket.map(it => ({ it: it, info: it.done ? null : bucketLinkInfo(it) })).filter(g => g.info && g.info.e.id === e.id);
-  if (!goals.length) return '';
-  return '<section class="group c-bucket"><div class="gh">버킷리스트 목표 <span class="hint">기록이 목표에 닿으면 자동으로 이뤄요</span></div>' + goals.map(g =>
-    '<a href="#" class="lrow" data-act="go" data-arg="bucket"><span class="lt"><span class="l1">' + esc(g.it.title) + '</span><span class="l2">' + esc(g.info.goal) + ' · ' + esc(g.info.text) + '</span><span class="lprog"><span style="width:' + g.info.pct.toFixed(0) + '%"></span></span></span>' + CHEV + '</a>').join('') + '</section>';
-}
 function viewReview() {
   const off = NAV.roff || 0, t = todayStr(), end = addDays(t, -7 * off), start = addDays(end, -6);
   const g = growthAt(end), comp = compositeG(g), cp = compositeG(growthAt(addDays(end, -7)));
@@ -1442,7 +1395,7 @@ function viewEx(id) {
   ];
   if (e.unit !== '회') rows.splice(1, 0, ['1회 기록', s.avgEntry == null ? dash : exVal(s.avgEntry, e), s.pbEntry ? exVal(s.pbEntry, e) : dash]);
   if (e.minutes) rows.splice(2, 0, ['페이스', fmtPace(s.pace7) + (s.pace7 ? ' /km' : ''), fmtPace(s.pbPace) + (s.pbPace ? ' /km' : '')]);
-  h += statTable('이번 주 평균', '개인 최고', rows, e.cls) + '<!--col-->' + goalsCard(e) + bucketGoalsFor(e);
+  h += statTable('이번 주 평균', '개인 최고', rows, e.cls) + '<!--col-->' + goalsCard(e);
   const list = (S.logs.ex[e.id] || []).slice().sort(byDateDesc).slice(0, 8);
   h += '<section class="group"><div class="gh">최근 기록 <span class="hint">눌러서 수정</span></div>' + (list.length ? list.map(x =>
     entryRow('ex|' + e.id + '|' + x.id, dateLabel(x.d), (x.m > 0 ? fmtMS(x.m) + ' · 페이스 ' + fmtPace(x.m / x.v) + ' /km' : ' '), exVal(x.v, e))).join('') : '<div class="emptyrow">아직 기록이 없어요.</div>') + '</section>';
@@ -1470,7 +1423,7 @@ function viewRun(e) {
   rows.push(['1회 거리', rs.avgDist30 == null ? dash : exVal(rs.avgDist30, e), rs.pbDist ? exVal(rs.pbDist, e) : dash]);
   h += statTable('평균 (30일)', '최고', rows, e.cls);
   if (rs.dists.some(d => d.n > 0)) h += '<p class="foot">거리별 기록은 그 거리의 ±10% 안에서 달린 기록을 해당 거리로 환산한 값이에요.</p>';
-  h += '<!--col-->' + goalsCard(e) + bucketGoalsFor(e);
+  h += '<!--col-->' + goalsCard(e);
   const pbMap = {};
   rs.dists.forEach(d => { if (d.bestId) pbMap[d.bestId] = d.D.label + ' 최고'; });
   if (rs.pbPaceId) pbMap[rs.pbPaceId] = (pbMap[rs.pbPaceId] ? pbMap[rs.pbPaceId] + ' · ' : '') + '최고 페이스';
@@ -1666,15 +1619,14 @@ const whenOf = x => (x.when === '올해' || x.when === '내년') ? x.when : '언
 const safeUrl = u => /^https?:\/\/\S+$/i.test(u || '') ? u : '';
 function listRow(kind, it, idx, total) {
   const bucket = kind === 'bucket', act = bucket ? 'Bucket' : 'Wish', title = bucket ? it.title : it.name;
-  const info = bucket && !it.done ? bucketLinkInfo(it) : null;
   const fit = !bucket ? wishFit(it) : null;
   const dd = it.doneDate || (it.doneAt ? it.doneAt.replace(/-/g, '.') : '');
-  const sub = it.done ? (bucket ? (it.autoSeen ? '운동 기록으로 이뤘어요 · ' : '') + esc(dd) : '구입한 날 ' + (it.doneAt ? md(it.doneAt) : ''))
-    : (info ? esc(info.goal) + ' · ' + esc(info.text) : (it.memo ? esc(it.memo) : '')) + (bucket && it.addedAt ? (it.memo || info ? ' · ' : '') + '기록 ' + md(it.addedAt) : '') + (fit ? ' <span class="fit ' + fit + '">' + (fit === 'ok' ? '이번 달 예산 안' : '이번 달 예산 초과') + '</span>' : '');
+  const sub = it.done ? (bucket ? esc(dd) : '구입한 날 ' + (it.doneAt ? md(it.doneAt) : ''))
+    : (it.memo ? esc(it.memo) : '') + (bucket && it.addedAt ? (it.memo ? ' · ' : '') + '기록 ' + md(it.addedAt) : '') + (fit ? ' <span class="fit ' + fit + '">' + (fit === 'ok' ? '이번 달 예산 안' : '이번 달 예산 초과') + '</span>' : '');
   const price = !bucket && it.price > 0 ? '<span class="liprice">' + won(it.price) + '</span>' : '';
   const link = !bucket && safeUrl(it.link) ? '<a class="lilink" href="' + esc(it.link) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(title) + ' 링크 열기">링크</a>' : '';
   return '<div class="lirow c-' + kind + '">' + (idx ? '<button type="button" class="lino" data-act="bucketNum" data-arg="' + it.id + '|' + idx + '" aria-label="번호 ' + idx + ' 바꾸기">' + idx + '</button>' : '') + '<button type="button" class="lick" data-act="tg' + act + '" data-arg="' + it.id + '" aria-pressed="' + !!it.done + '" aria-label="' + esc(title) + (it.done ? ' 다시 진행 중으로' : (bucket ? ' 이뤘어요' : ' 구입했어요')) + '">' + (it.done ? DONE_SVG : TODO_SVG) + '</button>' +
-    '<button type="button" class="litext" data-act="edit' + act + '" data-arg="' + it.id + '"><span class="li1' + (it.done ? ' dn' : '') + '">' + esc(title) + '</span>' + (sub ? '<span class="li2">' + sub + '</span>' : '') + (info ? '<span class="lprog"><span style="width:' + info.pct.toFixed(0) + '%"></span></span>' : '') + '</button>' + link + price + '</div>';
+    '<button type="button" class="litext" data-act="edit' + act + '" data-arg="' + it.id + '"><span class="li1' + (it.done ? ' dn' : '') + '">' + esc(title) + '</span>' + (sub ? '<span class="li2">' + sub + '</span>' : '') + '</button>' + link + price + '</div>';
 }
 /* 번호는 항목마다 하나뿐인 고유번호예요. 진행 중이든 이룬 것이든 같은 번호표를 써요. */
 function ensureBucketNos() {
@@ -2477,61 +2429,23 @@ function sheetAddFaith() {
 
 /* ---- 버킷리스트 ---- */
 const showDone = v => { const w = byId('donewrap'); if (w && w.style) w.style.display = v === 'done' ? 'block' : 'none'; };
-function linkFieldsHtml(v) {
-  const e = v.lex ? S.settings.exercises.find(x => x.id === v.lex) : null;
-  if (!e) return '';
-  let h = '';
-  if (e.minutes) {
-    const types = [{ v: 'dist', l: '한 번에 달린 거리' }].concat(e.id === 'run' ? [{ v: 'time', l: '거리·시간 목표' }] : []);
-    h += '<div class="fld"><label>달성 조건</label>' + chipsHtml('ltype', types, v.ltype) + '</div>';
-    if (v.ltype === 'time' && e.id === 'run') {
-      h += '<div class="fld"><label>거리</label>' + chipsHtml('ldist', RUN_DISTS.map(d => ({ v: d.d, l: d.label })), v.ldist) + '</div>' +
-        '<div class="two">' + field('목표 시간 · 분', 'f-lmin', 'number', v.lmin, 'inputmode="numeric" step="1" min="0"') + field('초', 'f-lsec', 'number', v.lsec, 'inputmode="numeric" step="1" min="0" max="59"') + '</div>';
-    } else h += field('목표 거리 (' + e.unit + ')', 'f-ltarget', 'number', v.ltarget, 'inputmode="decimal" step="any" min="0" placeholder="예: 21.1"');
-  } else h += field('하루 목표 (' + e.unit + ')', 'f-ltarget', 'number', v.ltarget, 'inputmode="numeric" step="1" min="0" placeholder="예: 100"');
-  return h;
-}
-function syncLink() {
-  const v = SHEET.vals;
-  ['f-ltarget', 'f-lmin', 'f-lsec'].forEach(id => { const el = byId(id); if (el) v[{ 'f-ltarget': 'ltarget', 'f-lmin': 'lmin', 'f-lsec': 'lsec' }[id]] = el.value; });
-}
-function refreshLink() { syncLink(); const w = byId('linkwrap'); if (w) w.innerHTML = linkFieldsHtml(SHEET.vals); }
 function sheetBucket(bid) {
   const t = todayStr(), cur = bid ? S.bucket.find(x => x.id === bid) : null;
   if (bid && !cur) return;
-  const L = cur && cur.link, exs = S.settings.show.exercise ? S.settings.exercises : [];
-  const vals = { when: cur ? whenOf(cur) : '올해', status: cur && cur.done ? 'done' : 'open',
-    lex: L && exs.some(e => e.id === L.ex) ? L.ex : '', ltype: L ? L.type : 'dist', ldist: L && L.dist ? L.dist : 5,
-    lmin: L && L.type === 'time' ? Math.floor(L.sec / 60) : '', lsec: L && L.type === 'time' ? L.sec % 60 : '', ltarget: L && L.type !== 'time' ? L.target : '' };
+  const vals = { when: cur ? whenOf(cur) : '올해', status: cur && cur.done ? 'done' : 'open' };
   const body = field('하고 싶은 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="60" placeholder="예: 하프마라톤 완주"') +
     field('기록한 날', 'f-added', 'date', cur ? (cur.addedAt || '') : t, 'max="' + t + '"') +
     '<div class="fld"><label>언제쯤?</label>' + chipsHtml('when', ['올해', '내년', '언젠가'].map(x => ({ v: x, l: x })), vals.when) + '</div>' +
     area('메모 (선택)', 'f-memo', cur ? cur.memo : '', 'maxlength="200" rows="3" placeholder="이유나 준비할 것을 적어 두세요"') +
-    (exs.length ? '<div class="fld"><label>운동 기록과 연결 (선택)</label>' + chipsHtml('lex', [{ v: '', l: '연결 안 함' }].concat(exs.map(e => ({ v: e.id, l: e.name }))), vals.lex) + '<p class="fhint">기록이 목표에 닿으면 자동으로 이룬 것으로 바뀌어요.</p></div><div id="linkwrap">' + linkFieldsHtml(vals) + '</div>' : '') +
     '<div class="fld"><label>상태</label>' + chipsHtml('status', [{ v: 'open', l: '진행 중' }, { v: 'done', l: '이뤘어요' }], vals.status) + '</div>' +
     '<div id="donewrap" style="display:' + (vals.status === 'done' ? 'block' : 'none') + '">' + field('이룬 날짜 (연도.월.일)', 'f-ddate', 'text', cur ? (cur.doneDate || (cur.doneAt ? cur.doneAt.replace(/-/g, '.') : t.replace(/-/g, '.'))) : t.replace(/-/g, '.'), 'inputmode="numeric" maxlength="10" autocomplete="off" data-inp="ddate" placeholder="예: 2020.07.06 (월·일을 몰라도 돼요)"') + '</div>' +
     (cur ? delBtn('bucket|' + bid) : '') + ERR;
   openSheet(cur ? '버킷리스트 수정' : '버킷리스트 추가', body, () => {
     const title = val('f-title').trim();
     if (!title) return setErr('내용을 입력해 주세요.');
-    syncLink();
-    const V = SHEET.vals, e = V.lex ? S.settings.exercises.find(x => x.id === V.lex) : null;
-    let link = null;
-    if (e) {
-      if (e.minutes && V.ltype === 'time' && e.id === 'run') {
-        const sc = parseFloat(V.lsec) || 0, sec = Math.round((parseFloat(V.lmin) || 0) * 60 + sc);
-        if (sc > 59) return setErr('초는 0~59 사이로 입력해 주세요.');
-        if (!(sec > 0)) return setErr('목표 시간을 입력해 주세요.');
-        link = { ex: e.id, type: 'time', dist: Number(V.ldist), sec: sec };
-      } else {
-        const target = parseFloat(V.ltarget);
-        if (!(target > 0)) return setErr('운동 연결의 목표 값을 입력해 주세요.');
-        link = { ex: e.id, type: e.minutes ? 'dist' : 'day', target: target };
-      }
-    }
+    const V = SHEET.vals;
     const rec = cur || { id: 'b' + uid() };
-    if (JSON.stringify(link) !== JSON.stringify(cur ? cur.link || null : null)) rec.autoSeen = false;
-    rec.title = title; rec.memo = val('f-memo').trim(); rec.when = V.when; rec.link = link;
+    rec.title = title; rec.memo = val('f-memo').trim(); rec.when = V.when; delete rec.link; delete rec.autoSeen;
     rec.addedAt = val('f-added') || (cur ? cur.addedAt || null : t);
     rec.done = V.status === 'done';
     if (rec.done) {
@@ -2545,8 +2459,6 @@ function sheetBucket(bid) {
     done();
   }, { vals: vals, focus: !cur, onPick: grp => {
     if (grp === 'status') showDone(SHEET.vals.status);
-    else if (grp === 'lex') { const e = S.settings.exercises.find(x => x.id === SHEET.vals.lex); SHEET.vals.ltype = e && e.minutes ? 'dist' : 'day'; SHEET.vals.ltarget = ''; refreshLink(); }
-    else if (grp === 'ltype') refreshLink();
   } });
 }
 
@@ -3280,10 +3192,9 @@ function renderSide() {
 }
 function render(top) {
   LAYOUT = applyLayout();
-  const fixedChanged = applyFixed(), got = applyBucketLinks(), bib = ensureBible(), tdc = syncTodos(), bks = importBucketSeed(), bno = ensureBucketNos();
-  if (fixedChanged || got.length || bib || tdc || bks || bno) commit();
+  const fixedChanged = applyFixed(), bib = ensureBible(), tdc = syncTodos(), bks = importBucketSeed(), bno = ensureBucketNos();
+  if (fixedChanged || bib || tdc || bks || bno) commit();
   if (bks) toast(bks === 'new' ? '버킷리스트 ' + S.bucket.length + '개를 넣었어요' : bks === 'ko' ? '버킷리스트를 한국어로 바꿨어요' : '이룬 날짜를 정리했어요');
-  if (got.length) toast('버킷리스트를 이뤘어요: ' + got[0]);
   const v = byId('view');
   let html;
   try { html = layout(VIEWS[NAV.route]()); }
