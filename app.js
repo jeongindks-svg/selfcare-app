@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 34;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 35;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1726,13 +1726,36 @@ function bucketBody() {
   }
   return h;
 }
+/* 버킷리스트 첫머리: 오로라가 흐르는 밤하늘 · 눈 덮인 산 · 마을 불빛 (코드로 그려요) */
+function bucketHero() {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  let stars = '', lights = '';
+  for (let i = 0; i < 70; i++) {
+    const r = rnd() < 0.12 ? 1.5 : 0.5 + rnd() * 0.8;
+    stars += '<circle class="' + (i % 7 === 0 ? 'tw' : '') + '" cx="' + (rnd() * 400).toFixed(1) + '" cy="' + (rnd() * 150).toFixed(1) + '" r="' + r.toFixed(2) + '" fill="#fff" opacity="' + (0.35 + rnd() * 0.65).toFixed(2) + '"/>';
+  }
+  for (let i = 0; i < 34; i++) lights += '<circle cx="' + (6 + rnd() * 388).toFixed(1) + '" cy="' + (196 + rnd() * 20).toFixed(1) + '" r="' + (0.7 + rnd() * 1.1).toFixed(2) + '" fill="#FFB347" opacity="' + (0.6 + rnd() * 0.4).toFixed(2) + '"/>';
+  return '<svg class="bksvg" viewBox="0 0 400 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><defs>' +
+    '<linearGradient id="bks" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#040b24"/><stop offset=".55" stop-color="#0a2a4d"/><stop offset="1" stop-color="#0e5560"/></linearGradient>' +
+    '<linearGradient id="bka" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#37e6b0"/><stop offset=".6" stop-color="#5df2c8"/><stop offset="1" stop-color="#7a8cff"/></linearGradient>' +
+    '<linearGradient id="bkn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9f3fb"/><stop offset="1" stop-color="#9dbad4"/></linearGradient>' +
+    '<filter id="bkb" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="9"/></filter></defs>' +
+    '<rect width="400" height="260" fill="url(#bks)"/>' + stars +
+    '<g class="aur" filter="url(#bkb)"><path d="M-30 96C70 10 150 130 240 62S390 24 440 86V150C350 104 280 176 190 134S60 196 -30 140Z" fill="url(#bka)" opacity=".62"/><path d="M-30 60C60 -10 140 70 230 28S380 -6 440 40V84C350 56 280 110 190 80S50 120 -30 90Z" fill="#6bf0cf" opacity=".4"/></g>' +
+    '<path d="M0 196L48 150 92 178 150 126 212 184 268 150 330 190 400 160V260H0Z" fill="#17395a"/>' +
+    '<path d="M0 214L40 178 84 202 132 160 190 206 250 176 316 208 400 184V260H0Z" fill="#244f78"/>' +
+    '<path d="M150 126l-13 17 8-3 6 9 7-9 8 4zM48 150l-10 14 7-3 5 8 6-8 7 3z" fill="#e9f3fb" opacity=".9"/>' + lights +
+    '<path d="M0 238C70 220 140 230 220 218S350 214 400 228V260H0Z" fill="url(#bkn)"/><path d="M0 252C90 240 170 248 260 238S360 240 400 246V260H0Z" fill="#cfe1f1"/></svg>';
+}
 function viewBucket() {
   const st = bucketStats(), pct = st.total ? Math.round(100 * st.done / st.total) : 0;
-  let h = backHdr('버킷리스트', 'flag', 'bucket', '');
-  h += '<div class="searchbar"><input type="search" id="bq" class="tin" value="' + esc(NAV.bq || '') + '" placeholder="버킷리스트 검색" autocomplete="off" enterkeyhint="search" aria-label="버킷리스트 검색" data-inp="bsearch"></div>';
-  h += '<section class="card c-bucket"><div class="ml">이룬 것</div><div class="bigrow"><div class="big">' + st.done + '<span class="u">/ ' + st.total + '</span></div><div class="sm nm">' + pct + '%</div></div><div class="track"><div style="width:' + pct + '%"></div></div></section>';
-  h += bigBtn('addBucket', '', 'bucket', '버킷리스트 추가') + '<div id="bres" class="stackc">' + bucketBody() + '</div>';
-  return h;
+  const chev = '<svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1L2 8l6 7"/></svg>';
+  return '<div class="bkpage"><div class="bkhero">' + bucketHero() + '<div class="bkhd"><a href="#" class="back bkback" data-act="back">' + chev + esc(backLabel()) + '</a>' +
+    '<h1>버킷리스트</h1><p>하고 싶은 일을, 하나씩</p>' +
+    '<div class="bkstat"><div class="bks1"><b>' + st.done + '</b><span> / ' + st.total + ' 이룸</span><em>' + pct + '%</em></div><div class="bktrack"><span style="width:' + pct + '%"></span></div></div></div></div>' +
+    '<div class="bkbody"><div class="searchbar"><input type="search" id="bq" class="tin" value="' + esc(NAV.bq || '') + '" placeholder="버킷리스트 검색" autocomplete="off" enterkeyhint="search" aria-label="버킷리스트 검색" data-inp="bsearch"></div>' +
+    '<button type="button" class="btn full bkadd" data-act="addBucket" data-arg="">버킷리스트 추가</button><div id="bres" class="stackc">' + bucketBody() + '</div></div></div>';
 }
 function viewWish() {
   const st = wishStats(), m = S.settings.show.money ? moneyStats() : null;

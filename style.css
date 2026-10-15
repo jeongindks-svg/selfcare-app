@@ -758,3 +758,45 @@ button.lino{flex:none;min-width:32px;height:32px;margin:0 0 0 10px;padding:0 6px
 .lirow.failed .plfail{color:var(--link)}
 .searchbar .tin{width:100%;min-height:44px;border:0;border-radius:12px;background:var(--card);padding:0 14px;font-size:16px;color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
 .sortchips{margin-bottom:2px}
+
+/* v35: 버킷리스트 — 오로라 밤하늘 */
+.bkpage{border-radius:22px;overflow:hidden;background:linear-gradient(180deg,#0e5560 0,#0a2a4d 38%,#07142b 100%);color:#fff;box-shadow:0 8px 26px rgba(4,12,40,.35)}
+.bkhero{position:relative;height:262px;overflow:hidden}
+.bksvg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bksvg .aur{animation:bkdrift 16s ease-in-out infinite alternate}
+.bksvg .tw{animation:bktw 3.6s ease-in-out infinite alternate}
+@keyframes bkdrift{from{transform:translateX(-14px)}to{transform:translateX(14px)}}
+@keyframes bktw{from{opacity:.25}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.bksvg .aur,.bksvg .tw{animation:none}}
+.bkhd{position:relative;height:100%;padding:8px 16px 16px;display:flex;flex-direction:column}
+.bkback{color:#bfe8ff!important;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+.bkhd h1{margin:2px 0 0;font-size:34px;font-weight:800;letter-spacing:-.6px;color:#fff;text-shadow:0 2px 14px rgba(0,30,60,.7)}
+.bkhd p{margin:2px 0 0;font-size:14px;color:rgba(255,255,255,.85);text-shadow:0 1px 8px rgba(0,30,60,.7)}
+.bkstat{margin-top:auto;padding:10px 14px;border-radius:16px;background:rgba(6,20,45,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+.bks1{display:flex;align-items:baseline;gap:6px;font-size:14px;color:rgba(255,255,255,.85)}
+.bks1 b{font-size:26px;color:#fff}.bks1 em{margin-left:auto;font-style:normal;font-weight:700;color:#7ef2cf}
+.bktrack{height:6px;border-radius:3px;background:rgba(255,255,255,.2);margin-top:6px;overflow:hidden}
+.bktrack span{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,#37e6b0,#7a8cff)}
+.bkbody{padding:14px;display:flex;flex-direction:column;gap:12px}
+.bkpage .searchbar .tin{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.bkpage .searchbar .tin::placeholder{color:rgba(255,255,255,.55)}
+.bkadd{background:linear-gradient(90deg,#14a58a,#3d7be0)!important;color:#fff}
+.bkpage .seg{background:rgba(255,255,255,.12)}
+.bkpage .seg button{color:rgba(255,255,255,.85)}
+.bkpage .seg button[aria-pressed="true"]{background:rgba(255,255,255,.26);color:#fff;box-shadow:none}
+.bkpage .cs{background:rgba(255,255,255,.12);color:#fff}
+.bkpage .cs.on{background:#2fb7a0;color:#fff}
+.bkpage .group{background:rgba(255,255,255,.07);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);color:#fff}
+.bkpage .gh{color:rgba(255,255,255,.75);border-bottom-color:rgba(255,255,255,.1)}
+.bkpage .gh .hint{color:rgba(255,255,255,.55)}
+.bkpage .lirow{border-top-color:rgba(255,255,255,.09)}
+.bkpage .li1{color:#fff}.bkpage .li1.dn{color:rgba(255,255,255,.5)}
+.bkpage .li2{color:rgba(255,255,255,.62)}
+.bkpage button.lino{background:rgba(126,242,207,.16);color:#8ff0d0}
+.bkpage .lick svg.off circle{stroke:rgba(255,255,255,.55)}
+.bkpage .lick svg.on circle{fill:#2fd1a6}
+.bkpage .emptyrow,.bkpage .emptyc{color:rgba(255,255,255,.7)}
+.bkpage .emptyc{background:rgba(255,255,255,.07)}
+.bkpage .lprog{background:rgba(255,255,255,.18)}.bkpage .lprog span{background:#5df2c8}
+html[data-side] .onecol:has(> .bkpage){max-width:1000px}
+html[data-side] .bkhero{height:300px}
