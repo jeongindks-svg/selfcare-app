@@ -800,3 +800,46 @@ button.lino{flex:none;min-width:32px;height:32px;margin:0 0 0 10px;padding:0 6px
 .bkpage .lprog{background:rgba(255,255,255,.18)}.bkpage .lprog span{background:#5df2c8}
 html[data-side] .onecol:has(> .bkpage){max-width:1000px}
 html[data-side] .bkhero{height:300px}
+
+/* v36: 할 일 색상은 파스텔 톤으로 */
+.todo.c-red,.swt2.c-red{--tb:#FFE3E3;--tr:#F4A3A3;--tt:#8A3A3A}
+.todo.c-run,.swt2.c-run{--tb:#FFE8D6;--tr:#F7B98A;--tt:#8A4A1E}
+.todo.c-money,.swt2.c-money{--tb:#FFF4CC;--tr:#F2D56B;--tt:#7A6200}
+.todo.c-push,.swt2.c-push{--tb:#DDF5E4;--tr:#8FD6A6;--tt:#2E6B45}
+.todo.c-bucket,.swt2.c-bucket{--tb:#D6F3F1;--tr:#86D3CD;--tt:#1F6B67}
+.todo.c-blue,.swt2.c-blue{--tb:#DDEBFF;--tr:#93BFF5;--tt:#25508F}
+.todo.c-sleep,.swt2.c-sleep{--tb:#E6E4FF;--tr:#AEA9F2;--tt:#433C99}
+.todo.c-wish,.swt2.c-wish{--tb:#F0E3FF;--tr:#C9A4F2;--tt:#66359A}
+.todo.c-faith,.swt2.c-faith{--tb:#FFE1EE;--tr:#F3A3C3;--tt:#8C2F58}
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]) .todo.c-red,:root:not([data-theme="light"]) .swt2.c-red{--tb:rgba(255,184,184,0.14);--tr:#FFB8B8;--tt:#FFB8B8}
+:root:not([data-theme="light"]) .todo.c-run,:root:not([data-theme="light"]) .swt2.c-run{--tb:rgba(255,201,160,0.14);--tr:#FFC9A0;--tt:#FFC9A0}
+:root:not([data-theme="light"]) .todo.c-money,:root:not([data-theme="light"]) .swt2.c-money{--tb:rgba(255,229,138,0.14);--tr:#FFE58A;--tt:#FFE58A}
+:root:not([data-theme="light"]) .todo.c-push,:root:not([data-theme="light"]) .swt2.c-push{--tb:rgba(166,235,190,0.14);--tr:#A6EBBE;--tt:#A6EBBE}
+:root:not([data-theme="light"]) .todo.c-bucket,:root:not([data-theme="light"]) .swt2.c-bucket{--tb:rgba(157,232,226,0.14);--tr:#9DE8E2;--tt:#9DE8E2}
+:root:not([data-theme="light"]) .todo.c-blue,:root:not([data-theme="light"]) .swt2.c-blue{--tb:rgba(175,208,255,0.14);--tr:#AFD0FF;--tt:#AFD0FF}
+:root:not([data-theme="light"]) .todo.c-sleep,:root:not([data-theme="light"]) .swt2.c-sleep{--tb:rgba(196,192,255,0.14);--tr:#C4C0FF;--tt:#C4C0FF}
+:root:not([data-theme="light"]) .todo.c-wish,:root:not([data-theme="light"]) .swt2.c-wish{--tb:rgba(221,189,255,0.14);--tr:#DDBDFF;--tt:#DDBDFF}
+:root:not([data-theme="light"]) .todo.c-faith,:root:not([data-theme="light"]) .swt2.c-faith{--tb:rgba(255,185,214,0.14);--tr:#FFB9D6;--tt:#FFB9D6}
+}
+:root[data-theme="dark"] .todo.c-red,:root[data-theme="dark"] .swt2.c-red{--tb:rgba(255,184,184,0.14);--tr:#FFB8B8;--tt:#FFB8B8}
+:root[data-theme="dark"] .todo.c-run,:root[data-theme="dark"] .swt2.c-run{--tb:rgba(255,201,160,0.14);--tr:#FFC9A0;--tt:#FFC9A0}
+:root[data-theme="dark"] .todo.c-money,:root[data-theme="dark"] .swt2.c-money{--tb:rgba(255,229,138,0.14);--tr:#FFE58A;--tt:#FFE58A}
+:root[data-theme="dark"] .todo.c-push,:root[data-theme="dark"] .swt2.c-push{--tb:rgba(166,235,190,0.14);--tr:#A6EBBE;--tt:#A6EBBE}
+:root[data-theme="dark"] .todo.c-bucket,:root[data-theme="dark"] .swt2.c-bucket{--tb:rgba(157,232,226,0.14);--tr:#9DE8E2;--tt:#9DE8E2}
+:root[data-theme="dark"] .todo.c-blue,:root[data-theme="dark"] .swt2.c-blue{--tb:rgba(175,208,255,0.14);--tr:#AFD0FF;--tt:#AFD0FF}
+:root[data-theme="dark"] .todo.c-sleep,:root[data-theme="dark"] .swt2.c-sleep{--tb:rgba(196,192,255,0.14);--tr:#C4C0FF;--tt:#C4C0FF}
+:root[data-theme="dark"] .todo.c-wish,:root[data-theme="dark"] .swt2.c-wish{--tb:rgba(221,189,255,0.14);--tr:#DDBDFF;--tt:#DDBDFF}
+:root[data-theme="dark"] .todo.c-faith,:root[data-theme="dark"] .swt2.c-faith{--tb:rgba(255,185,214,0.14);--tr:#FFB9D6;--tt:#FFB9D6}
+
+.todo:not(.thead){background:var(--tb,transparent);border-top-color:rgba(255,255,255,.55)}
+.todo.skipped{--tb:transparent}
+.tdck svg.off circle{stroke:var(--tr,var(--sub2))}
+.tdck svg.on circle{fill:var(--tr,var(--cb))}
+.tdck svg.part circle{stroke:var(--tr,var(--c))}
+.td1{color:var(--tt,var(--text))}
+.tdm .mk.y{color:var(--tt,var(--ct))}
+.todo .tdn.has{background:rgba(255,255,255,.65);color:var(--tt,var(--text2))}
+.swt2.c-red,.swt2.c-run,.swt2.c-money,.swt2.c-push,.swt2.c-bucket,.swt2.c-blue,.swt2.c-sleep,.swt2.c-wish,.swt2.c-faith{background:var(--tr)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .todo:not(.thead){border-top-color:rgba(255,255,255,.08)}:root:not([data-theme="light"]) .todo .tdn.has{background:rgba(255,255,255,.12)}}
+:root[data-theme="dark"] .todo:not(.thead){border-top-color:rgba(255,255,255,.08)}:root[data-theme="dark"] .todo .tdn.has{background:rgba(255,255,255,.12)}
