@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 36;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 37;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
