@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 41;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 42;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -514,15 +514,17 @@ function schOn(x, day) {
   return x.d === day;
 }
 const schLabel = x => x.rep === 'daily' ? '매일' : x.rep === 'wk' ? '평일' : x.rep === 'days' ? (x.days || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(i => WD[i]).join('·') : '';
+/* 하루는 새벽 2시에 끝나요: 00:00~01:59는 전날 일정의 마지막 시간으로 봐요 */
+const SCH_CUT = 2 * 60;
+const schMin = t => { const m = +t.slice(0, 2) * 60 + +t.slice(3, 5); return m < SCH_CUT ? m + 1440 : m; };
+const schToday = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes() < SCH_CUT ? addDays(todayStr(), -1) : todayStr(); };
 function schCard() {
-  const today = todayStr(), sd = NAV.sd || today, t = sd, now = new Date(), nm = PAD(now.getHours()) + ':' + PAD(now.getMinutes());
-  const list = S.sched.filter(x => schOn(x, t)).sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
-  const nxt = sd === today ? list.find(x => !(x.dn && x.dn[t]) && (x.e || x.t) >= nm) : null;
+  const today = schToday(), sd = NAV.sd || today, t = sd, now = new Date(), nm = schMin(PAD(now.getHours()) + ':' + PAD(now.getMinutes()));
+  const list = S.sched.filter(x => schOn(x, t)).sort((a, b) => schMin(a.t) - schMin(b.t));
+  const nxt = sd === today ? list.find(x => schMin(x.e || x.t) >= nm) : null;
   const rows = list.map(x => {
-    const dn = !!(x.dn && x.dn[t]);
-    return '<div class="ttrow' + (dn ? ' dn' : '') + (nxt === x ? ' nx' : '') + '"><span class="ttt">' + x.t + (x.e ? '<i>' + x.e + '</i>' : '') + '</span><span class="ttd"></span>' +
-      '<button type="button" class="ttx" data-act="editSch" data-arg="' + x.id + '"><span class="li1">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="li2">' + schLabel(x) + '</span>' : '') + '</button>' +
-      '<button type="button" class="lick" data-act="schTg" data-arg="' + x.id + '" aria-pressed="' + dn + '" aria-label="' + esc(x.title) + (dn ? ' 완료 취소' : ' 완료') + '">' + (dn ? DONE_SVG : TODO_SVG) + '</button></div>';
+    return '<div class="ttrow' + (nxt === x ? ' nx' : '') + '"><span class="ttt">' + x.t + (x.e ? '<i>' + x.e + '</i>' : '') + '</span><span class="ttd"></span>' +
+      '<button type="button" class="ttx" data-act="editSch" data-arg="' + x.id + '"><span class="li1">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="li2">' + schLabel(x) + '</span>' : '') + '</button></div>';
   }).join('');
   const mon = addDays(today, -((new Date(today + 'T00:00:00').getDay() + 6) % 7));
   const strip = '<div class="schweek" role="group" aria-label="요일 선택">' + Array.from({ length: 7 }, (_, i) => { const d = addDays(mon, i), n = S.sched.filter(x => schOn(x, d)).length; return '<button type="button" class="swd' + (d === sd ? ' on' : '') + (d === today ? ' tdy' : '') + '" data-act="schDay" data-arg="' + d + '" aria-pressed="' + (d === sd) + '"><span>' + WD[new Date(d + 'T00:00:00').getDay()] + '</span><b>' + (+d.slice(8)) + '</b><i' + (n ? '' : ' class="z"') + '></i></button>'; }).join('') + '</div>';
@@ -531,17 +533,17 @@ function schCard() {
 function sheetSch(sid) {
   const cur = sid ? S.sched.find(x => x.id === sid) : null;
   if (sid && !cur) return;
-  const sd = NAV.sd || todayStr(), vals = { rep: cur ? (['daily', 'wk', 'days'].indexOf(cur.rep) >= 0 ? cur.rep : 'once') : 'once', days: cur && cur.rep === 'days' ? (cur.days || []).slice() : [new Date(sd + 'T00:00:00').getDay()] };
-  const body = '<div class="two">' + field('시작 (예: 0900)', 'f-t', 'text', cur ? cur.t : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="09:00"') + field('끝 (선택)', 'f-e', 'text', cur ? cur.e || '' : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="10:00"') + '</div>' +
+  const sd = NAV.sd || schToday(), vals = { rep: cur ? (['daily', 'wk', 'days'].indexOf(cur.rep) >= 0 ? cur.rep : 'once') : 'once', days: cur && cur.rep === 'days' ? (cur.days || []).slice() : [new Date(sd + 'T00:00:00').getDay()] };
+  const body = '<div class="two">' + field('시작 (예: 0900, 새벽은 0130)', 'f-t', 'text', cur ? cur.t : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="09:00"') + field('끝 (선택)', 'f-e', 'text', cur ? cur.e || '' : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="10:00"') + '</div>' +
     field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝"') +
-    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: cur && cur.d && cur.d !== todayStr() ? md(cur.d) + '만' : (!cur && sd !== todayStr() ? md(sd) + '만' : '오늘만') }, { v: 'days', l: '요일 선택' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
+    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: cur && cur.d && cur.d !== schToday() ? md(cur.d) + '만' : (!cur && sd !== schToday() ? md(sd) + '만' : '오늘만') }, { v: 'days', l: '요일 선택' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
     '<div class="fld" id="dayswrap" style="display:' + (vals.rep === 'days' ? 'block' : 'none') + '"><label>요일</label><div class="chipsel" role="group">' + [1, 2, 3, 4, 5, 6, 0].map(i => '<button type="button" class="cs' + (vals.days.indexOf(i) >= 0 ? ' on' : '') + '" data-act="schDays" data-arg="' + i + '" aria-pressed="' + (vals.days.indexOf(i) >= 0) + '">' + WD[i] + '</button>').join('') + '</div></div>' +
     (cur ? delBtn('sch|' + sid) : '') + ERR;
   openSheet(cur ? '일정 수정' : '일정 추가', body, () => {
     const t = parseHM(val('f-t')), e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
     if (!t) return setErr('시작 시간을 24시간 형식으로 적어 주세요. 예: 0900');
     if (e === null) return setErr('끝 시간 형식이 맞지 않아요. 예: 1000');
-    if (e && e <= t) return setErr('끝 시간은 시작보다 늦어야 해요.');
+    if (e && schMin(e) <= schMin(t)) return setErr('끝 시간은 시작보다 늦어야 해요. (새벽 2시 전은 같은 날 밤으로 봐요)');
     if (!title) return setErr('할 일을 입력해 주세요.');
     const rec = cur || { id: 'sc' + uid(), dn: {} };
     if (SHEET.vals.rep === 'days' && !SHEET.vals.days.length) return setErr('요일을 하나 이상 골라 주세요.');
@@ -2903,7 +2905,6 @@ const ACT = {
   editSch(arg) { sheetSch(arg); },
   schDay(arg) { NAV.sd = arg; render(); },
   schDays(arg, el) { if (!SHEET) return; const n = Number(arg), b = SHEET.vals.days, i = b.indexOf(n); if (i >= 0) b.splice(i, 1); else b.push(n); el.classList.toggle('on', i < 0); el.setAttribute('aria-pressed', String(i < 0)); },
-  schTg(arg) { const x = S.sched.find(y => y.id === arg), t = NAV.sd || todayStr(); if (!x) return; x.dn = x.dn || {}; if (x.dn[t]) delete x.dn[t]; else x.dn[t] = true; commit(); render(); },
   remDone(arg) { const x = S.reminders.find(y => y.id === arg); if (x) { x.done = true; x.doneAt = todayStr(); commit(); toast('완료했어요'); render(); } },
   remSnooze(arg) { sheetSnooze(arg); },
   snzPick(arg) { const el = byId('f-snz'); if (el) el.value = arg; },
