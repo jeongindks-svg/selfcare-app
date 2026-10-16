@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 39;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 40;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -81,7 +81,7 @@ function defaultState() {
       topics: [], fixed: []
     },
     logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {}, wheel: {} },
-    bucket: [], wish: [], plans: [], todos: [], reminders: []
+    bucket: [], wish: [], plans: [], todos: [], reminders: [], sched: []
   };
 }
 function normalize(o) {
@@ -104,7 +104,7 @@ function normalize(o) {
   s.logs = Object.assign({}, d.logs, o.logs || {});
   ['ex', 'sleep', 'faith', 'nospend', 'bible', 'wheel'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
-  ['bucket', 'wish', 'plans', 'todos', 'reminders'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+  ['bucket', 'wish', 'plans', 'todos', 'reminders', 'sched'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
 }
 let S = defaultState();
@@ -505,6 +505,43 @@ function syncTodos() {
 const MARK = { y: '✓', n: '✕', s: '–' };
 const SKIP_SVG = '<svg class="sk" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="none" stroke-width="2"/><path d="M9 14h10" stroke-width="2.4" stroke-linecap="round"/></svg>';
 const PART_SVG = f => '<svg class="part" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle class="bg" cx="14" cy="14" r="12" fill="none" stroke-width="2.5"/><circle cx="14" cy="14" r="12" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="' + (f * 75.4).toFixed(1) + ' 75.4" transform="rotate(-90 14 14)"/></svg>';
+/* ---- 오늘의 타임테이블 ---- */
+function schOn(x, day) {
+  const wd = new Date(day + 'T00:00:00').getDay();
+  return x.rep === 'daily' || (x.rep === 'wk' && wd >= 1 && wd <= 5) || (x.rep !== 'daily' && x.rep !== 'wk' && x.d === day);
+}
+function schCard() {
+  const t = todayStr(), now = new Date(), nm = PAD(now.getHours()) + ':' + PAD(now.getMinutes());
+  const list = S.sched.filter(x => schOn(x, t)).sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
+  const nxt = list.find(x => !(x.dn && x.dn[t]) && (x.e || x.t) >= nm);
+  const rows = list.map(x => {
+    const dn = !!(x.dn && x.dn[t]);
+    return '<div class="ttrow' + (dn ? ' dn' : '') + (nxt === x ? ' nx' : '') + '"><span class="ttt">' + x.t + (x.e ? '<i>' + x.e + '</i>' : '') + '</span><span class="ttd"></span>' +
+      '<button type="button" class="ttx" data-act="editSch" data-arg="' + x.id + '"><span class="li1">' + esc(x.title) + '</span>' + (x.rep === 'daily' ? '<span class="li2">매일</span>' : x.rep === 'wk' ? '<span class="li2">평일</span>' : '') + '</button>' +
+      '<button type="button" class="lick" data-act="schTg" data-arg="' + x.id + '" aria-pressed="' + dn + '" aria-label="' + esc(x.title) + (dn ? ' 완료 취소' : ' 완료') + '">' + (dn ? DONE_SVG : TODO_SVG) + '</button></div>';
+  }).join('');
+  return '<section class="group sched" aria-label="타임테이블"><div class="gh">타임테이블</div>' + rows + '<button type="button" class="addrow" data-act="addSch">' + ico('plus', 18, 2) + '시간대별 일정 추가</button></section>';
+}
+function sheetSch(sid) {
+  const cur = sid ? S.sched.find(x => x.id === sid) : null;
+  if (sid && !cur) return;
+  const vals = { rep: cur ? (cur.rep === 'daily' || cur.rep === 'wk' ? cur.rep : 'once') : 'once' };
+  const body = '<div class="two">' + field('시작 (예: 0900)', 'f-t', 'text', cur ? cur.t : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="09:00"') + field('끝 (선택)', 'f-e', 'text', cur ? cur.e || '' : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="10:00"') + '</div>' +
+    field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝"') +
+    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: '오늘만' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
+    (cur ? delBtn('sch|' + sid) : '') + ERR;
+  openSheet(cur ? '일정 수정' : '일정 추가', body, () => {
+    const t = parseHM(val('f-t')), e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
+    if (!t) return setErr('시작 시간을 24시간 형식으로 적어 주세요. 예: 0900');
+    if (e === null) return setErr('끝 시간 형식이 맞지 않아요. 예: 1000');
+    if (e && e <= t) return setErr('끝 시간은 시작보다 늦어야 해요.');
+    if (!title) return setErr('할 일을 입력해 주세요.');
+    const rec = cur || { id: 'sc' + uid(), dn: {} };
+    rec.t = t; rec.e = e; rec.title = title; rec.rep = SHEET.vals.rep; rec.d = cur && cur.d && SHEET.vals.rep === 'once' ? cur.d : todayStr();
+    if (!cur) S.sched.push(rec);
+    done();
+  }, { vals: vals, focus: !cur });
+}
 function todoRow(x) {
   const cnt = todoCounted(x) ? todoCount(x) : -1;
   const d = todoDone(x), sk = todoSkipped(x), ln = todoLinkName(x.link), lk = x.link && x.link.k;
@@ -1079,7 +1116,7 @@ function viewToday() {
     (dn.length || skd.length ? '<section class="group done" aria-label="완료한 일"><div class="gh">완료</div>' + dn.slice().sort(todoByColor).map(todoRow).join('') + skd.slice().sort(todoByColor).map(todoRow).join('') + '</section>' : '');
   const rems = S.reminders.filter(remActive).sort((a, b) => a.due < b.due ? -1 : 1);
   const remCard = rems.length ? '<section class="group rems" aria-label="알림"><div class="gh row"><span>알림</span><a href="#" class="lnk" data-act="go" data-arg="remind">모두 보기</a></div>' + rems.map(remRow).join('') + '</section>' : '';
-  return hdr('오늘', sub) + top + remCard + '<!--cols-->' + todoCard.split('<section class="group done"')[0] + '<!--col-->' + (todoCard.indexOf('<section class="group done"') >= 0 ? '<section class="group done"' + todoCard.split('<section class="group done"')[1] : '');
+  return hdr('오늘', sub) + top + remCard + '<!--cols-->' + todoCard.split('<section class="group done"')[0] + '<!--col-->' + schCard() + (todoCard.indexOf('<section class="group done"') >= 0 ? '<section class="group done"' + todoCard.split('<section class="group done"')[1] : '');
 }
 
 /* ---------- 분야 (목록) ---------- */
@@ -1552,10 +1589,10 @@ function planRow(x) {
   const meta = [];
   if (x.target > 0) meta.push(fmtN(x.cur, 0) + ' / ' + fmtN(x.target, 0) + (x.unit ? ' ' + esc(x.unit) : ''));
   if (f) meta.push('실패 ' + dotDate(x.failedAt)); else if (d && x.doneAt) meta.push('달성 ' + dotDate(x.doneAt));
+  const dots = x.target > 0 && x.target <= 10 && !f ? '<span class="pldots" role="group" aria-label="체크">' + Array.from({ length: Math.round(x.target) }, (_, k) => '<button type="button" class="pld' + (k < x.cur ? ' on' : '') + '" data-act="planDot" data-arg="' + x.id + '|' + (k + 1) + '" aria-pressed="' + (k < x.cur) + '" aria-label="' + (k + 1) + '번째 체크">' + (k < x.cur ? '✓' : '') + '</button>').join('') + '</span>' : '';
   return '<div class="lirow c-blue' + (f ? ' failed' : '') + '"><button type="button" class="lick" data-act="planTg" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (f ? ' 실패 취소' : d ? ' 다시 진행 중으로' : ' 달성') + '">' + (f ? FAIL_SVG : d ? DONE_SVG : TODO_SVG) + '</button>' +
-    '<button type="button" class="litext" data-act="editPlan" data-arg="' + x.id + '"><span class="li1' + (d || f ? ' dn' : '') + '">' + esc(x.title) + '</span>' + (meta.length ? '<span class="li2">' + meta.join(' · ') + '</span>' : '') + (x.target > 0 && !f ? '<span class="lprog"><span style="width:' + pct.toFixed(0) + '%"></span></span>' : '') + '</button>' +
-    (x.target > 0 && !f ? '<span class="plstep"><button type="button" data-act="planStep" data-arg="' + x.id + '|-1" aria-label="하나 줄이기">−</button><button type="button" class="plnum" data-act="planNum" data-arg="' + x.id + '" aria-label="숫자로 직접 입력">' + fmtN(x.cur, 0) + '</button><button type="button" data-act="planStep" data-arg="' + x.id + '|1" aria-label="하나 늘리기">+</button></span>' : '') +
-    (d ? '' : '<button type="button" class="plfail" data-act="planFail" data-arg="' + x.id + '">' + (f ? '되돌리기' : '실패') + '</button>') + '</div>';
+    '<div class="ltcol"><button type="button" class="litext" data-act="editPlan" data-arg="' + x.id + '"><span class="li1' + (d || f ? ' dn' : '') + '">' + esc(x.title) + '</span>' + (meta.length ? '<span class="li2">' + meta.join(' · ') + '</span>' : '') + (x.target > 0 && !f && !dots ? '<span class="lprog"><span style="width:' + pct.toFixed(0) + '%"></span></span>' : '') + '</button>' + dots + '</div>' +
+    (x.target > 0 && !f ? '<span class="plstep"><button type="button" data-act="planStep" data-arg="' + x.id + '|-1" aria-label="하나 줄이기">−</button><button type="button" class="plnum" data-act="planNum" data-arg="' + x.id + '" aria-label="숫자로 직접 입력">' + fmtN(x.cur, 0) + '</button><button type="button" data-act="planStep" data-arg="' + x.id + '|1" aria-label="하나 늘리기">+</button></span>' : '') + '</div>';
 }
 /* 달성·실패를 체크할 때 날짜를 함께 적어요 (기본은 오늘) */
 function sheetPlanDate(x, kind) {
@@ -1602,7 +1639,7 @@ function sheetPlan(pid) {
   const body = (allowed.length > 1 ? '<div class="fld"><label>기간</label>' + chipsHtml('per', allowed.map(k => ({ v: k, l: PLAN_LABEL[k] })), vals.per) + '</div>' : '') +
     field('목표', 'f-title', 'text', cur ? cur.title : '', 'maxlength="60" placeholder="예: 책 1권 읽기"') +
     '<div class="two">' + field('목표 횟수·양 (선택)', 'f-target', 'number', cur && cur.target ? cur.target : '', 'inputmode="decimal" step="any" min="0" placeholder="예: 4"') + field('단위 (선택)', 'f-unit', 'text', cur ? cur.unit : '', 'maxlength="6" placeholder="예: 권, 회"') + '</div>' +
-    '<p class="fhint">숫자를 적으면 +/− 로 쌓아서 채우고, 비워 두면 체크만 해요.</p>' + (cur ? delBtn('plan|' + pid) : '') + ERR;
+    '<p class="fhint">숫자를 적으면 체크 칸(10 이하)이나 +/− 로 채우고, 비워 두면 체크 한 번이에요.</p>' + (cur && !planDone(cur) || cur && planFailed(cur) ? '<button type="button" class="btn ghost" data-act="planFail" data-arg="' + pid + '">' + (planFailed(cur) ? '실패 되돌리기' : '실패로 표시') + '</button>' : '') + (cur ? delBtn('plan|' + pid) : '') + ERR;
   openSheet(cur ? '목표 수정' : (allowed[0] === 'year' ? '연간 목표 추가' : '목표 추가'), body, () => {
     const title = val('f-title').trim(), target = Math.max(0, parseFloat(val('f-target')) || 0);
     if (!title) return setErr('목표를 입력해 주세요.');
@@ -1662,9 +1699,14 @@ function bucketBody() {
     const list = S.bucket.filter(x => x.title.toLowerCase().indexOf(q) >= 0).sort(byNo);
     return '<section class="group"><div class="gh">검색 결과 <span class="hint">' + list.length + '개</span></div>' + (list.length ? list.map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">찾는 항목이 없어요.</div>') + '</section>';
   }
-  const f = NAV.bf === 'done' ? 'done' : 'open';
-  let h = '<div class="seg rangeseg" role="group" aria-label="보기">' + [['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
-  if (f === 'open') {
+  const f = NAV.bf === 'done' ? 'done' : NAV.bf === 'year' ? 'year' : 'open';
+  const ty = +todayStr().slice(0, 4), yOpen = S.bucket.filter(x => !x.done && whenOf(x) === '올해');
+  let h = '<div class="seg rangeseg" role="group" aria-label="보기">' + [['year', ty + '년 ' + yOpen.length], ['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+  if (f === 'year') {
+    const yd = S.bucket.filter(x => x.done && x.doneYear === ty).sort(byNo);
+    h += '<section class="group"><div class="gh">' + ty + '년에 이루고 싶은 것 <span class="hint">' + yOpen.length + '개</span></div>' + (yOpen.length ? yOpen.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">올해로 정한 버킷리스트가 없어요. ‘언제쯤?’을 올해로 바꿔 보세요.</div>') + '</section>';
+    if (yd.length) h += '<section class="group"><div class="gh">올해 이룬 것 <span class="hint">' + yd.length + '개</span></div>' + yd.map(x => listRow('bucket', x, x.no)).join('') + '</section>';
+  } else if (f === 'open') {
     ['올해', '내년', '언젠가'].forEach(w => {
       const list = S.bucket.filter(x => !x.done && whenOf(x) === w);
       if (list.length) h += '<section class="group"><div class="gh">' + w + ' <span class="hint">' + list.length + '개 · 번호를 누르면 바꿔요</span></div>' + list.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') + '</section>';
@@ -2679,7 +2721,7 @@ function mergeStates(a, b) {
     const n = out.logs.faith[d], o = O.logs.faith[d];
     out.logs.faith[d] = n ? Object.assign({}, o, n, { done: Object.assign({}, o.done, n.done) }) : o;
   });
-  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans); unionById(out.todos, O.todos); unionById(out.reminders, O.reminders);
+  unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans); unionById(out.todos, O.todos); unionById(out.reminders, O.reminders); unionById(out.sched, O.sched);
   out.todos.forEach(x => { const o = O.todos.find(y => y.id === x.id); if (o) { x.dn = Object.assign({}, o.dn, x.dn); x.sk = Object.assign({}, o.sk, x.sk); x.cnt = Object.assign({}, o.cnt, x.cnt); x.nt = Object.assign({}, o.nt, x.nt); } });
   out.theme = a.theme;
   out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
@@ -2849,6 +2891,9 @@ const ACT = {
   },
   bibleNum() { numSheet('오늘 읽은 분량', '오늘 읽은 분량 (일치)', S.logs.bible[todayStr()] || 0, v => { const t = todayStr(), n = Math.round(v); if (n) S.logs.bible[t] = n; else delete S.logs.bible[t]; }); },
   addRem() { sheetRem(); },
+  addSch() { sheetSch(); },
+  editSch(arg) { sheetSch(arg); },
+  schTg(arg) { const x = S.sched.find(y => y.id === arg), t = todayStr(); if (!x) return; x.dn = x.dn || {}; if (x.dn[t]) delete x.dn[t]; else x.dn[t] = true; commit(); render(); },
   remDone(arg) { const x = S.reminders.find(y => y.id === arg); if (x) { x.done = true; x.doneAt = todayStr(); commit(); toast('완료했어요'); render(); } },
   remSnooze(arg) { sheetSnooze(arg); },
   snzPick(arg) { const el = byId('f-snz'); if (el) el.value = arg; },
@@ -2892,8 +2937,9 @@ const ACT = {
   planFail(arg) {
     const x = S.plans.find(y => y.id === arg);
     if (!x) return;
-    if (planFailed(x)) { x.failed = false; x.failedAt = null; commit(); render(); } else sheetPlanDate(x, 'fail');
+    if (planFailed(x)) { x.failed = false; x.failedAt = null; commit(); closeSheet(); render(); } else sheetPlanDate(x, 'fail');
   },
+  planDot(arg) { const p = arg.split('|'), x = S.plans.find(y => y.id === p[0]); if (!x) return; const n = Number(p[1]); x.cur = x.cur === n ? n - 1 : n; x.doneAt = planDone(x) ? todayStr() : null; commit(); render(); },
   planStep(arg) { const p = arg.split('|'), x = S.plans.find(y => y.id === p[0]); if (!x) return; x.cur = Math.max(0, x.cur + Number(p[1])); x.doneAt = planDone(x) ? todayStr() : null; commit(); render(); },
   planCarry() {
     const cp = curPlan(), per = cp.per, pk = planKey(per, cp.off), prev = plansFor(per, planKey(per, cp.off + 1)).filter(x => !planDone(x));
@@ -3005,6 +3051,7 @@ const ACT = {
     else if (p[0] === 'note') S.logs.notes = S.logs.notes.filter(x => x.id !== p[1]);
     else if (p[0] === 'topic') S.settings.topics = S.settings.topics.filter(x => x.id !== p[1]);
     else if (p[0] === 'rem') S.reminders = S.reminders.filter(x => x.id !== p[1]);
+    else if (p[0] === 'sch') S.sched = S.sched.filter(x => x.id !== p[1]);
     else if (p[0] === 'todo') S.todos = S.todos.filter(x => x.id !== p[1]);
     else if (p[0] === 'plan') S.plans = S.plans.filter(x => x.id !== p[1]);
     else if (p[0] === 'fixed') S.settings.fixed = S.settings.fixed.filter(x => x.id !== p[1]);
