@@ -890,3 +890,12 @@ html[data-side] .bkhero{height:300px}
 .ttrow.dn .ttx .li1{color:var(--sub);text-decoration:line-through}
 .ttrow.dn .ttt{color:var(--sub)}
 .ttrow .lick{flex:none;min-width:44px}
+
+/* v41: 타임테이블 주간 */
+.schweek{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:6px 8px 8px}
+.swd{display:flex;flex-direction:column;align-items:center;gap:1px;border:0;background:transparent;color:var(--text);border-radius:12px;padding:5px 0 4px;min-height:52px}
+.swd span{font-size:11px;color:var(--sub)}
+.swd b{font-size:16px;font-weight:600}
+.swd i{width:5px;height:5px;border-radius:50%;background:var(--link)}.swd i.z{background:transparent}
+.swd.tdy b{color:var(--link)}
+.swd.on{background:var(--link)}.swd.on span,.swd.on b{color:#fff}.swd.on i{background:#fff}.swd.on i.z{background:transparent}

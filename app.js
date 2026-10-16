@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 40;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 41;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -508,27 +508,34 @@ const PART_SVG = f => '<svg class="part" width="28" height="28" viewBox="0 0 28 
 /* ---- 오늘의 타임테이블 ---- */
 function schOn(x, day) {
   const wd = new Date(day + 'T00:00:00').getDay();
-  return x.rep === 'daily' || (x.rep === 'wk' && wd >= 1 && wd <= 5) || (x.rep !== 'daily' && x.rep !== 'wk' && x.d === day);
+  if (x.rep === 'daily') return true;
+  if (x.rep === 'wk') return wd >= 1 && wd <= 5;
+  if (x.rep === 'days') return (x.days || []).indexOf(wd) >= 0;
+  return x.d === day;
 }
+const schLabel = x => x.rep === 'daily' ? '매일' : x.rep === 'wk' ? '평일' : x.rep === 'days' ? (x.days || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(i => WD[i]).join('·') : '';
 function schCard() {
-  const t = todayStr(), now = new Date(), nm = PAD(now.getHours()) + ':' + PAD(now.getMinutes());
+  const today = todayStr(), sd = NAV.sd || today, t = sd, now = new Date(), nm = PAD(now.getHours()) + ':' + PAD(now.getMinutes());
   const list = S.sched.filter(x => schOn(x, t)).sort((a, b) => a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
-  const nxt = list.find(x => !(x.dn && x.dn[t]) && (x.e || x.t) >= nm);
+  const nxt = sd === today ? list.find(x => !(x.dn && x.dn[t]) && (x.e || x.t) >= nm) : null;
   const rows = list.map(x => {
     const dn = !!(x.dn && x.dn[t]);
     return '<div class="ttrow' + (dn ? ' dn' : '') + (nxt === x ? ' nx' : '') + '"><span class="ttt">' + x.t + (x.e ? '<i>' + x.e + '</i>' : '') + '</span><span class="ttd"></span>' +
-      '<button type="button" class="ttx" data-act="editSch" data-arg="' + x.id + '"><span class="li1">' + esc(x.title) + '</span>' + (x.rep === 'daily' ? '<span class="li2">매일</span>' : x.rep === 'wk' ? '<span class="li2">평일</span>' : '') + '</button>' +
+      '<button type="button" class="ttx" data-act="editSch" data-arg="' + x.id + '"><span class="li1">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="li2">' + schLabel(x) + '</span>' : '') + '</button>' +
       '<button type="button" class="lick" data-act="schTg" data-arg="' + x.id + '" aria-pressed="' + dn + '" aria-label="' + esc(x.title) + (dn ? ' 완료 취소' : ' 완료') + '">' + (dn ? DONE_SVG : TODO_SVG) + '</button></div>';
   }).join('');
-  return '<section class="group sched" aria-label="타임테이블"><div class="gh">타임테이블</div>' + rows + '<button type="button" class="addrow" data-act="addSch">' + ico('plus', 18, 2) + '시간대별 일정 추가</button></section>';
+  const mon = addDays(today, -((new Date(today + 'T00:00:00').getDay() + 6) % 7));
+  const strip = '<div class="schweek" role="group" aria-label="요일 선택">' + Array.from({ length: 7 }, (_, i) => { const d = addDays(mon, i), n = S.sched.filter(x => schOn(x, d)).length; return '<button type="button" class="swd' + (d === sd ? ' on' : '') + (d === today ? ' tdy' : '') + '" data-act="schDay" data-arg="' + d + '" aria-pressed="' + (d === sd) + '"><span>' + WD[new Date(d + 'T00:00:00').getDay()] + '</span><b>' + (+d.slice(8)) + '</b><i' + (n ? '' : ' class="z"') + '></i></button>'; }).join('') + '</div>';
+  return '<section class="group sched" aria-label="타임테이블"><div class="gh">타임테이블' + (sd === today ? '' : ' <span class="hint">' + md(sd) + '</span>') + '</div>' + strip + rows + '<button type="button" class="addrow" data-act="addSch">' + ico('plus', 18, 2) + '시간대별 일정 추가</button></section>';
 }
 function sheetSch(sid) {
   const cur = sid ? S.sched.find(x => x.id === sid) : null;
   if (sid && !cur) return;
-  const vals = { rep: cur ? (cur.rep === 'daily' || cur.rep === 'wk' ? cur.rep : 'once') : 'once' };
+  const sd = NAV.sd || todayStr(), vals = { rep: cur ? (['daily', 'wk', 'days'].indexOf(cur.rep) >= 0 ? cur.rep : 'once') : 'once', days: cur && cur.rep === 'days' ? (cur.days || []).slice() : [new Date(sd + 'T00:00:00').getDay()] };
   const body = '<div class="two">' + field('시작 (예: 0900)', 'f-t', 'text', cur ? cur.t : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="09:00"') + field('끝 (선택)', 'f-e', 'text', cur ? cur.e || '' : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="10:00"') + '</div>' +
     field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝"') +
-    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: '오늘만' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
+    '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: cur && cur.d && cur.d !== todayStr() ? md(cur.d) + '만' : (!cur && sd !== todayStr() ? md(sd) + '만' : '오늘만') }, { v: 'days', l: '요일 선택' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
+    '<div class="fld" id="dayswrap" style="display:' + (vals.rep === 'days' ? 'block' : 'none') + '"><label>요일</label><div class="chipsel" role="group">' + [1, 2, 3, 4, 5, 6, 0].map(i => '<button type="button" class="cs' + (vals.days.indexOf(i) >= 0 ? ' on' : '') + '" data-act="schDays" data-arg="' + i + '" aria-pressed="' + (vals.days.indexOf(i) >= 0) + '">' + WD[i] + '</button>').join('') + '</div></div>' +
     (cur ? delBtn('sch|' + sid) : '') + ERR;
   openSheet(cur ? '일정 수정' : '일정 추가', body, () => {
     const t = parseHM(val('f-t')), e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
@@ -537,10 +544,11 @@ function sheetSch(sid) {
     if (e && e <= t) return setErr('끝 시간은 시작보다 늦어야 해요.');
     if (!title) return setErr('할 일을 입력해 주세요.');
     const rec = cur || { id: 'sc' + uid(), dn: {} };
-    rec.t = t; rec.e = e; rec.title = title; rec.rep = SHEET.vals.rep; rec.d = cur && cur.d && SHEET.vals.rep === 'once' ? cur.d : todayStr();
+    if (SHEET.vals.rep === 'days' && !SHEET.vals.days.length) return setErr('요일을 하나 이상 골라 주세요.');
+    rec.t = t; rec.e = e; rec.title = title; rec.rep = SHEET.vals.rep; rec.days = SHEET.vals.rep === 'days' ? SHEET.vals.days.slice() : []; rec.d = cur && cur.d ? cur.d : sd;
     if (!cur) S.sched.push(rec);
     done();
-  }, { vals: vals, focus: !cur });
+  }, { vals: vals, focus: !cur, onPick: grp => { if (grp === 'rep') { const w = byId('dayswrap'); if (w) w.style.display = SHEET.vals.rep === 'days' ? 'block' : 'none'; } } });
 }
 function todoRow(x) {
   const cnt = todoCounted(x) ? todoCount(x) : -1;
@@ -2893,7 +2901,9 @@ const ACT = {
   addRem() { sheetRem(); },
   addSch() { sheetSch(); },
   editSch(arg) { sheetSch(arg); },
-  schTg(arg) { const x = S.sched.find(y => y.id === arg), t = todayStr(); if (!x) return; x.dn = x.dn || {}; if (x.dn[t]) delete x.dn[t]; else x.dn[t] = true; commit(); render(); },
+  schDay(arg) { NAV.sd = arg; render(); },
+  schDays(arg, el) { if (!SHEET) return; const n = Number(arg), b = SHEET.vals.days, i = b.indexOf(n); if (i >= 0) b.splice(i, 1); else b.push(n); el.classList.toggle('on', i < 0); el.setAttribute('aria-pressed', String(i < 0)); },
+  schTg(arg) { const x = S.sched.find(y => y.id === arg), t = NAV.sd || todayStr(); if (!x) return; x.dn = x.dn || {}; if (x.dn[t]) delete x.dn[t]; else x.dn[t] = true; commit(); render(); },
   remDone(arg) { const x = S.reminders.find(y => y.id === arg); if (x) { x.done = true; x.doneAt = todayStr(); commit(); toast('완료했어요'); render(); } },
   remSnooze(arg) { sheetSnooze(arg); },
   snzPick(arg) { const el = byId('f-snz'); if (el) el.value = arg; },
