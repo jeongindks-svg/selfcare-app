@@ -1,11 +1,14 @@
 'use strict';
-const APP_VERSION = 42;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 43;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
 const parseD = s => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
 const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return ymd(d); };
 const todayStr = () => ymd(new Date());
+/* 하루의 기준은 새벽 3시: 00:00~02:59에는 아직 전날이에요 (오늘 할 일·타임테이블) */
+const DAY_CUT_H = 3;
+const dayStr = () => ymd(new Date(Date.now() - DAY_CUT_H * 3600000));
 const dayDiff = (a, b) => Math.round((parseD(a) - parseD(b)) / 86400000);
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -448,7 +451,7 @@ function planPct(period) {
 
 /* 오늘 할 일: 기록과 연결하면 체크할 때 바로 기록 창이 열리고, 기록하면 자동으로 완료돼요 */
 function todoLinkDone(l, day) {
-  const t = day || todayStr();
+  const t = day || dayStr();
   if (!l) return false;
   if (l.k === 'ex') return exSum(l.id, t) > 0;
   if (l.k === 'sleep') return !!sleepOn(t);
@@ -471,9 +474,9 @@ function tdColor(x) {
 }
 const todoByColor = (a, b) => TD_COLORS.findIndex(c => c[0] === tdColor(a)) - TD_COLORS.findIndex(c => c[0] === tdColor(b));
 const todoCounted = x => x.target > 1 && !(x.link && todoLinkName(x.link));
-const todoCount = (x, d) => (x.cnt && x.cnt[d || todayStr()]) || 0;
+const todoCount = (x, d) => (x.cnt && x.cnt[d || dayStr()]) || 0;
 function todoDone(x) {
-  const t = todayStr();
+  const t = dayStr();
   if (todoCounted(x)) return todoCount(x, t) >= x.target;
   if (x.link && todoLinkName(x.link)) return todoLinkDone(x.link);
   return x.daily ? !!(x.dn && x.dn[t]) : !!x.done;
@@ -487,16 +490,16 @@ function todoDoneOn(x, d) {
 function todoMark(x, d) {
   if (x.daily && !todoDue(x, d)) return '';
   if (x.sk && x.sk[d]) return 's';
-  if (!x.daily && !(x.link && todoLinkName(x.link))) return d === todayStr() ? (todoDoneOn(x, d) ? 'y' : 'n') : '';
+  if (!x.daily && !(x.link && todoLinkName(x.link))) return d === dayStr() ? (todoDoneOn(x, d) ? 'y' : 'n') : '';
   if ((x.d || d) > d) return '';
   return todoDoneOn(x, d) ? 'y' : 'n';
 }
-const todoDays = () => [0, 1, 2, 3].map(i => addDays(todayStr(), -i));
-const todoSkipped = x => !!(x.sk && x.sk[todayStr()]);
+const todoDays = () => [0, 1, 2, 3].map(i => addDays(dayStr(), -i));
+const todoSkipped = x => !!(x.sk && x.sk[dayStr()]);
 const todoDue = (x, d) => !x.every || (dayDiff(d, x.d || d) >= 0 && dayDiff(d, x.d || d) % x.every === 0);
-function todoVisible(x) { const t = todayStr(); return x.daily ? todoDue(x, t) : (x.done ? x.doneAt === t : (x.d || t) <= t); }
+function todoVisible(x) { const t = dayStr(); return x.daily ? todoDue(x, t) : (x.done ? x.doneAt === t : (x.d || t) <= t); }
 function syncTodos() {
-  const t = todayStr(); let ch = false;
+  const t = dayStr(); let ch = false;
   S.todos.forEach(x => { if (!x.daily && !x.done && x.link && todoLinkDone(x.link)) { x.done = true; x.doneAt = t; ch = true; } });
   const keep = S.todos.filter(x => x.daily || !x.done || !x.doneAt || dayDiff(t, x.doneAt) <= 30);
   if (keep.length !== S.todos.length) { S.todos = keep; ch = true; }
@@ -514,10 +517,10 @@ function schOn(x, day) {
   return x.d === day;
 }
 const schLabel = x => x.rep === 'daily' ? '매일' : x.rep === 'wk' ? '평일' : x.rep === 'days' ? (x.days || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(i => WD[i]).join('·') : '';
-/* 하루는 새벽 2시에 끝나요: 00:00~01:59는 전날 일정의 마지막 시간으로 봐요 */
-const SCH_CUT = 2 * 60;
+/* 하루는 새벽 3시에 끝나요: 00:00~02:59는 전날 일정의 마지막 시간으로 봐요 */
+const SCH_CUT = DAY_CUT_H * 60;
 const schMin = t => { const m = +t.slice(0, 2) * 60 + +t.slice(3, 5); return m < SCH_CUT ? m + 1440 : m; };
-const schToday = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes() < SCH_CUT ? addDays(todayStr(), -1) : todayStr(); };
+const schToday = dayStr;
 function schCard() {
   const today = schToday(), sd = NAV.sd || today, t = sd, now = new Date(), nm = schMin(PAD(now.getHours()) + ':' + PAD(now.getMinutes()));
   const list = S.sched.filter(x => schOn(x, t)).sort((a, b) => schMin(a.t) - schMin(b.t));
@@ -543,7 +546,7 @@ function sheetSch(sid) {
     const t = parseHM(val('f-t')), e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
     if (!t) return setErr('시작 시간을 24시간 형식으로 적어 주세요. 예: 0900');
     if (e === null) return setErr('끝 시간 형식이 맞지 않아요. 예: 1000');
-    if (e && schMin(e) <= schMin(t)) return setErr('끝 시간은 시작보다 늦어야 해요. (새벽 2시 전은 같은 날 밤으로 봐요)');
+    if (e && schMin(e) <= schMin(t)) return setErr('끝 시간은 시작보다 늦어야 해요. (새벽 3시 전은 같은 날 밤으로 봐요)');
     if (!title) return setErr('할 일을 입력해 주세요.');
     const rec = cur || { id: 'sc' + uid(), dn: {} };
     if (SHEET.vals.rep === 'days' && !SHEET.vals.days.length) return setErr('요일을 하나 이상 골라 주세요.');
@@ -555,9 +558,9 @@ function sheetSch(sid) {
 function todoRow(x) {
   const cnt = todoCounted(x) ? todoCount(x) : -1;
   const d = todoDone(x), sk = todoSkipped(x), ln = todoLinkName(x.link), lk = x.link && x.link.k;
-  const cls = tdColor(x), note = (x.nt && x.nt[todayStr()]) || '';
+  const cls = tdColor(x), note = (x.nt && x.nt[dayStr()]) || '';
   return '<div class="todo c-' + cls + (sk ? ' skipped' : '') + '"><button type="button" class="tdck" data-act="' + (sk ? 'todoSkip' : 'todoTg') + '" data-arg="' + x.id + '" aria-pressed="' + d + '" aria-label="' + esc(x.title) + (sk ? ' 건너뜀 취소' : d ? ' 완료' : ln ? ' 기록하러 가기' : cnt >= 0 ? ' 한 번 더 (' + cnt + '/' + x.target + ')' : ' 체크') + '">' + (sk ? SKIP_SVG : d ? DONE_SVG : cnt > 0 ? PART_SVG(cnt / x.target) : TODO_SVG) + '</button>' +
-    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span>' + (!x.daily && !d && !sk && (x.d || '') < todayStr() ? '<i class="carry" title="이월">↪</i>' : '') + '</button>' + '<input type="text" class="tdn' + (note ? ' has' : '') + '" value="' + esc(note) + '" maxlength="60" autocomplete="off" enterkeyhint="done" data-chg="tdNote" data-arg="' + x.id + '" aria-label="' + esc(x.title) + ' 비고">' + (cnt >= 0 ? '<button type="button" class="tdc" data-act="todoNum" data-arg="' + x.id + '" aria-label="횟수 직접 입력">' + cnt + ' / ' + x.target + '</button>' : '') +
+    '<button type="button" class="tdt" data-act="editTodo" data-arg="' + x.id + '"><span class="td1">' + esc(x.title) + '</span>' + (!x.daily && !d && !sk && (x.d || '') < dayStr() ? '<i class="carry" title="이월">↪</i>' : '') + '</button>' + '<input type="text" class="tdn' + (note ? ' has' : '') + '" value="' + esc(note) + '" maxlength="60" autocomplete="off" enterkeyhint="done" data-chg="tdNote" data-arg="' + x.id + '" aria-label="' + esc(x.title) + ' 비고">' + (cnt >= 0 ? '<button type="button" class="tdc" data-act="todoNum" data-arg="' + x.id + '" aria-label="횟수 직접 입력">' + cnt + ' / ' + x.target + '</button>' : '') +
     '<span class="tdm" aria-hidden="true">' + todoDays().map(day => { const m = todoMark(x, day); return '<i class="mk ' + m + '">' + (m === 'n' && todoCounted(x) && todoCount(x, day) > 0 ? todoCount(x, day) : (MARK[m] || '')) + '</i>'; }).join('') + '</span></div>';
 }
 function todoHead() { return '<div class="todo thead" aria-hidden="true"><span class="tdck"></span><span class="tdt"></span><span class="tdm">' + todoDays().map(d => '<i class="mk">' + WD[parseD(d).getDay()] + '<br>' + (+d.slice(8)) + '</i>').join('') + '</span></div>'; }
@@ -1112,7 +1115,7 @@ function tile(arg, icon, name, cls, big, sub) {
   return '<a href="#" class="tile c-' + cls + '" data-act="go" data-arg="' + arg + '"><div class="tn">' + ico(icon, 18, 2) + name + '</div><div class="tb">' + esc(big) + '</div><div class="ts">' + esc(sub) + '</div></a>';
 }
 function viewToday() {
-  const now = new Date(), t = todayStr();
+  const t = dayStr(), now = new Date(t + 'T00:00:00');
   const sub = (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일';
   const tds = S.todos.filter(todoVisible), skd = tds.filter(todoSkipped), act = tds.filter(x => !todoSkipped(x)), dn = act.filter(todoDone), open = act.filter(x => !todoDone(x));
   const dayPct = act.length ? Math.round(100 * dn.length / act.length) : null;
@@ -1559,7 +1562,7 @@ const linkStr = l => !l ? '' : (l.k === 'ex' || l.k === 'wheel') ? l.k + ':' + l
 function sheetTodo(tid) {
   const cur = tid ? S.todos.find(x => x.id === tid) : null;
   if (tid && !cur) return;
-  const t0 = todayStr();
+  const t0 = dayStr();
   const vals = { lk: cur ? linkStr(cur.link) : '', rep: cur && cur.daily ? (cur.every ? 'every' : 'daily') : 'once', color: cur && cur.color ? cur.color : '' };
   const linkName = v => (todoLinks().find(o => o.v === v) || {}).l || '연결 안 함';
   const sw = [['', '자동']].concat(TD_COLORS).map(c => '<button type="button" class="swt2 c-' + (c[0] || 'blue') + (c[0] === '' ? ' auto' : '') + (vals.color === c[0] ? ' on' : '') + '" data-act="pickVal" data-arg="color|' + c[0] + '" data-grp="color" aria-pressed="' + (vals.color === c[0]) + '" aria-label="' + c[1] + '"></button>').join('');
@@ -2866,7 +2869,7 @@ const ACT = {
   logEx(arg) { sheetLogEx(arg); },
   addTodo() { sheetTodo(); }, editTodo(arg) { sheetTodo(arg); },
   todoTg(arg) {
-    const x = S.todos.find(y => y.id === arg), t = todayStr();
+    const x = S.todos.find(y => y.id === arg), t = dayStr();
     if (!x) return;
     const ln = x.link ? todoLinkName(x.link) : '';
     if (todoCounted(x)) {
@@ -2896,7 +2899,7 @@ const ACT = {
   },
   planNum(arg) { const x = S.plans.find(y => y.id === arg); if (x) numSheet(x.title, '지금까지 한 양' + (x.unit ? ' (' + x.unit + ')' : ''), x.cur, v => { x.cur = v; x.doneAt = planDone(x) ? todayStr() : null; }); },
   todoNum(arg) {
-    const x = S.todos.find(y => y.id === arg), t = todayStr();
+    const x = S.todos.find(y => y.id === arg), t = dayStr();
     if (x) numSheet(x.title, '오늘 한 횟수', todoCount(x, t), v => { x.cnt = x.cnt || {}; const n = Math.round(v); if (n) x.cnt[t] = n; else delete x.cnt[t]; if (!x.daily) { x.done = n >= x.target; x.doneAt = x.done ? t : null; } });
   },
   bibleNum() { numSheet('오늘 읽은 분량', '오늘 읽은 분량 (일치)', S.logs.bible[todayStr()] || 0, v => { const t = todayStr(), n = Math.round(v); if (n) S.logs.bible[t] = n; else delete S.logs.bible[t]; }); },
@@ -2916,7 +2919,7 @@ const ACT = {
   },
   toggleLink(arg, el) { const w = byId('linkpanel'); if (!w) return; const open = w.style.display === 'none'; w.style.display = open ? 'block' : 'none'; el.setAttribute('aria-expanded', String(open)); el.classList.toggle('open', open); },
   todoNote(arg) {
-    const x = S.todos.find(y => y.id === arg), t = todayStr();
+    const x = S.todos.find(y => y.id === arg), t = dayStr();
     if (!x) return;
     openSheet(x.title + ' · 비고', field('비고 (오늘만 보여요, 내일이면 비워져요)', 'f-note', 'text', (x.nt && x.nt[t]) || '', 'maxlength="60" placeholder="예: 5km 천천히"') + ERR, () => {
       x.nt = x.nt || {}; const v = val('f-note').trim();
@@ -2925,9 +2928,9 @@ const ACT = {
     });
   },
   todoSkipSheet(arg) { ACT.todoSkip(arg); closeSheet(); },
-  todoSkip(arg) { const x = S.todos.find(y => y.id === arg), t = todayStr(); if (!x) return; x.sk = x.sk || {}; if (x.sk[t]) delete x.sk[t]; else x.sk[t] = true; commit(); render(); },
+  todoSkip(arg) { const x = S.todos.find(y => y.id === arg), t = dayStr(); if (!x) return; x.sk = x.sk || {}; if (x.sk[t]) delete x.sk[t]; else x.sk[t] = true; commit(); render(); },
   todoSeed() {
-    const st = S.settings, add = (title, link) => S.todos.push({ id: 'td' + uid(), title: title, link: link, daily: true, d: todayStr(), done: false, doneAt: null, dn: {} });
+    const st = S.settings, add = (title, link) => S.todos.push({ id: 'td' + uid(), title: title, link: link, daily: true, d: dayStr(), done: false, doneAt: null, dn: {} });
     if (st.show.exercise) st.exercises.forEach(e => add(e.name, { k: 'ex', id: e.id }));
     if (st.show.sleep) add('수면 기록', { k: 'sleep' });
     if (st.show.money) add('가계부 쓰기', { k: 'money' });
@@ -3188,7 +3191,7 @@ const CHG = {
     sheetSleep(v, { bed: parseHM(val('f-bed')) || '23:30', wake: parseHM(val('f-wake')) || '07:00', score: SHEET.vals.score });
   },
   timeNorm(arg, v, el) { const n = parseHM(v); if (n && el) el.value = n; },
-  tdNote(arg, v) { const x = S.todos.find(y => y.id === arg), t = todayStr(); if (!x) return; x.nt = x.nt || {}; const n = String(v).trim(); if (n) x.nt[t] = n; else delete x.nt[t]; commit(); render(); },
+  tdNote(arg, v) { const x = S.todos.find(y => y.id === arg), t = dayStr(); if (!x) return; x.nt = x.nt || {}; const n = String(v).trim(); if (n) x.nt[t] = n; else delete x.nt[t]; commit(); render(); },
   renWheel(arg, v) { const w = S.settings.wheel.find(x => x.id === arg); if (w && v.trim()) w.name = v.trim(); commit(); render(); },
   renFaith(arg, v) { const f = S.settings.faith.find(x => x.id === arg); if (f && v.trim()) f.name = v.trim(); commit(); render(); }
 };
