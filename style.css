@@ -903,3 +903,8 @@ html[data-side] .bkhero{height:300px}
 /* v44: 가계부 간단하게 */
 .qadd{margin:-4px 0 10px}
 .qadd .cs{min-height:34px;padding:0 12px;font-size:14px}
+
+/* v45: 더 간결하게 */
+.addpair{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
+.addpair .addrow{border-top:0}
+.addpair .addrow + .addrow{border-left:1px solid var(--line)}

@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 44;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 45;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1124,7 +1124,7 @@ function viewToday() {
     ['week', 'month', 'year'].map(per => { const v = planPct(per), q = planSummary(per); return pcol(PLAN_LABEL[per], v, q.n ? q.done + ' / ' + q.n + ' 달성' : '목표 세우기', per === 'year' ? 'go' : 'goPlan', per === 'year' ? 'yearly' : per); }).join('');
   const top = '<section class="card c-blue" aria-label="계획 달성률"><div class="sh2"><div class="a1b">계획 달성률</div><a href="#" class="lnk" data-act="go" data-arg="goals">목표 관리</a></div><div class="pcols">' + pcols + '</div></section>';
   const todoCard = '<section class="group" aria-label="오늘 할 일"><div class="gh">오늘 할 일</div>' + (open.length ? todoHead() + open.slice().sort(todoByColor).map(todoRow).join('') : '') +
-    '<button type="button" class="addrow" data-act="addTodo">' + ico('plus', 18, 2) + '할 일 추가</button><button type="button" class="addrow" data-act="addRem">' + ico('bell', 18, 2) + '알림 추가 (날짜 지정)</button>' +
+    '<div class="addpair"><button type="button" class="addrow" data-act="addTodo">' + ico('plus', 18, 2) + '할 일</button><button type="button" class="addrow" data-act="addRem">' + ico('bell', 18, 2) + '알림</button></div>' +
     (S.todos.length ? '' : '<button type="button" class="addrow" data-act="todoSeed">추천 할 일 넣기</button>') + '</section>' +
     (dn.length || skd.length ? '<section class="group done" aria-label="완료한 일"><div class="gh">완료</div>' + dn.slice().sort(todoByColor).map(todoRow).join('') + skd.slice().sort(todoByColor).map(todoRow).join('') + '</section>' : '');
   const rems = S.reminders.filter(remActive).sort((a, b) => a.due < b.due ? -1 : 1);
@@ -1178,17 +1178,17 @@ function viewGrowth() {
   let h = hdr('Growth', '최근 7일 기준') + '<!--cols-->';
   const sent = growthSentence(g);
   if (comp == null) {
-    h += '<section class="card gsent"><div class="gs1">기록이 쌓이면 이번 주를 한 줄로 알려드려요.</div><div class="gs2">영역마다 3일 이상 기록해야 점수가 나와요.</div>' + seedBtn + '</section>';
+    h += '<section class="card gsent"><div class="gs1">기록이 쌓이면 이번 주를 한 줄로 알려드려요.</div>' + seedBtn + '</section>';
   } else {
     h += '<a href="#" class="card gsent" data-act="go" data-arg="growthd|all"><div class="gs1">' + (sent || '점수가 나온 영역이 한 곳이에요.') + '</div><div class="gs2">Growth ' + comp + '점 · ' + (cp == null ? '첫 점수예요' : '지난주보다 ' + delta(comp, cp)) + '</div></a>';
   }
   const ok = abils.filter(a => g[a.k].v != null).sort((a, b) => g[b.k].v - g[a.k].v), wait = abils.filter(a => g[a.k].v == null);
   const row = (a, wait2) => {
     const x = g[a.k];
-    return '<a href="#" class="glr c-' + a.cls + (wait2 ? ' wait' : '') + '" data-act="go" data-arg="growthd|' + a.k + '"><span class="gn"><span class="g1">' + a.name + '</span><span class="g2">' + (wait2 ? '기록 모으는 중 · ' + Math.min(x.n, MIN_DAYS) + ' / ' + MIN_DAYS + '일' : esc(x.basis.split(' · ')[0])) + '</span></span>' +
+    return '<a href="#" class="glr c-' + a.cls + (wait2 ? ' wait' : '') + '" data-act="go" data-arg="growthd|' + a.k + '"><span class="gn"><span class="g1">' + a.name + '</span><span class="g2">' + (wait2 ? '기록 ' + Math.min(x.n, MIN_DAYS) + ' / ' + MIN_DAYS + '일' : esc(x.basis.split(' · ')[0])) + '</span></span>' +
       '<span class="gtrack"><span style="width:' + (wait2 ? 0 : x.v) + '%"></span></span><span class="gv">' + (wait2 ? dash : x.v) + '</span>' + CHEV + '</a>';
   };
-  h += '<p class="foot">점수는 내가 정한 목표를 얼마나 지켰는지를 0~100으로 보여줘요. 영역을 누르면 8주 흐름과 계산 근거가 나와요.</p><!--col-->';
+  h += '<!--col-->';
   h += '<section class="group">' + ok.map(a => row(a, false)).join('') + wait.map(a => row(a, true)).join('') + '</section>';
   return h;
 }
@@ -1267,13 +1267,7 @@ function viewReview() {
   }).join('') : '<div class="emptyrow">켜져 있는 분야가 없어요.</div>') + '</section>';
   h += '<!--col-->';
   const ins = crossInsights(), good = ins.filter(r => r.ready && r.strong).sort((a, b) => b.mag - a.mag).slice(0, 3);
-  h += '<section><div class="sh"><h2>분야 간 연결</h2></div>';
-  if (good.length) h += '<div class="stackc">' + good.map(insightCard).join('') + '</div>';
-  else {
-    const waiting = ins.find(r => !r.ready);
-    h += '<section class="card emptyc"><div class="et">' + (ins.length ? (waiting ? '아직 연결이 보이지 않아요.<br><span class="need">' + esc(waiting.need) + '</span>' : '뚜렷한 연결은 아직 없어요.') : '수면과 다른 분야를 함께 켜 두면 연결을 찾아드려요.') + '</div></section>';
-  }
-  h += '<p class="foot">최근 8주 기록을 둘로 나눠 비교한 값이에요. 각 그룹이 ' + LINK_MIN + '일 이상이고 차이가 뚜렷할 때만 보여드려요. 원인이 아니라 함께 나타난 경향이라 참고용이에요.</p></section>';
+  if (good.length) h += '<section><div class="sh"><h2>분야 간 연결</h2></div><div class="stackc">' + good.map(insightCard).join('') + '</div></section>';
   const hc = heatCells();
   h += '<section class="card" aria-label="최근 5주 기록한 날"><div class="sh2"><div class="a1b">최근 5주 기록한 날</div><div class="hint">모두 기록한 날 ' + hc.full + '일</div></div>' +
     '<div class="heatd">' + '월화수목금토일'.split('').map(x => '<span>' + x + '</span>').join('') + '</div><div class="heat">' + hc.cells + '</div>' +
