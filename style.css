@@ -899,3 +899,7 @@ html[data-side] .bkhero{height:300px}
 .swd i{width:5px;height:5px;border-radius:50%;background:var(--link)}.swd i.z{background:transparent}
 .swd.tdy b{color:var(--link)}
 .swd.on{background:var(--link)}.swd.on span,.swd.on b{color:#fff}.swd.on i{background:#fff}.swd.on i.z{background:transparent}
+
+/* v44: 가계부 간단하게 */
+.qadd{margin:-4px 0 10px}
+.qadd .cs{min-height:34px;padding:0 12px;font-size:14px}
