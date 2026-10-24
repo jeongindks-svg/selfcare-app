@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 45;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 46;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1707,11 +1707,11 @@ function bucketBody() {
     return '<section class="group"><div class="gh">검색 결과 <span class="hint">' + list.length + '개</span></div>' + (list.length ? list.map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">찾는 항목이 없어요.</div>') + '</section>';
   }
   const f = NAV.bf === 'done' ? 'done' : NAV.bf === 'year' ? 'year' : 'open';
-  const ty = +todayStr().slice(0, 4), yOpen = S.bucket.filter(x => !x.done && whenOf(x) === '올해');
-  let h = '<div class="seg rangeseg" role="group" aria-label="보기">' + [['year', ty + '년 ' + yOpen.length], ['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
+  const ty = +todayStr().slice(0, 4), yOpen = S.bucket.filter(x => !x.done && whenOf(x) === '올해'), yDone = S.bucket.filter(x => x.done && x.doneYear === ty), yPct = yOpen.length + yDone.length ? Math.round(100 * yDone.length / (yOpen.length + yDone.length)) : 0;
+  let h = '<div class="seg rangeseg" role="group" aria-label="보기">' + [['year', ty + '년 ' + yPct + '%'], ['open', '진행 중 ' + st.open], ['done', '이룬 것 ' + st.done]].map(x => '<button type="button" data-act="bucketFilter" data-arg="' + x[0] + '" aria-pressed="' + (f === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   if (f === 'year') {
-    const yd = S.bucket.filter(x => x.done && x.doneYear === ty).sort(byNo);
-    h += '<section class="group"><div class="gh">' + ty + '년에 이루고 싶은 것 <span class="hint">' + yOpen.length + '개</span></div>' + (yOpen.length ? yOpen.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">올해로 정한 버킷리스트가 없어요. ‘언제쯤?’을 올해로 바꿔 보세요.</div>') + '</section>';
+    const yd = yDone.slice().sort(byNo);
+    h += '<section class="group"><div class="gh">' + ty + '년에 이루고 싶은 것 <span class="hint">달성 ' + yPct + '% · ' + yDone.length + ' / ' + (yOpen.length + yDone.length) + '</span></div>' + (yOpen.length ? yOpen.slice().sort(byNo).map(x => listRow('bucket', x, x.no)).join('') : '<div class="emptyrow">올해로 정한 버킷리스트가 없어요. ‘언제쯤?’을 올해로 바꿔 보세요.</div>') + '</section>';
     if (yd.length) h += '<section class="group"><div class="gh">올해 이룬 것 <span class="hint">' + yd.length + '개</span></div>' + yd.map(x => listRow('bucket', x, x.no)).join('') + '</section>';
   } else if (f === 'open') {
     ['올해', '내년', '언젠가'].forEach(w => {
