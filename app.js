@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 46;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 47;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1074,9 +1074,33 @@ function backHdr(title, icon, cls, right) {
     '<h1 class="withico c-' + cls + '">' + (icon ? '<span class="hico">' + ico(icon, 28, 2) + '</span>' : '') + title + '</h1></header>';
 }
 const editLink = arg => '<a href="#" class="lnk" data-act="go" data-arg="settings|' + arg + '">편집</a>';
-function segCtl() {
+function segCtl(withAll) {
+  const all = withAll && NAV.exall;
   return '<div class="seg rangeseg" role="group" aria-label="기간 선택">' + ['week', 'month', 'half'].map(k =>
-    '<button type="button" data-act="range" data-arg="' + k + '" aria-pressed="' + (NAV.range === k) + '">' + RANGE[k].seg + '</button>').join('') + '</div>';
+    '<button type="button" data-act="range" data-arg="' + k + '" aria-pressed="' + (!all && NAV.range === k) + '">' + RANGE[k].seg + '</button>').join('') +
+    (withAll ? '<button type="button" data-act="exAll" aria-pressed="' + all + '">전체</button>' : '') + '</div>';
+}
+/* 지금까지의 모든 기록을 날짜 순으로 이은 그래프 (주·월로 묶지 않고 기록 하나하나) */
+function allChart(pts, o) {
+  if (!pts.length) return '<div class="emptyin">' + (o.empty || '기록이 쌓이면 그래프가 그려져요.') + '</div>';
+  const vs = pts.map(p => p.v), lo0 = Math.min.apply(null, vs), hi0 = Math.max.apply(null, vs), pad = Math.max((hi0 - lo0) * 0.25, hi0 * 0.02, 0.1);
+  const lo = lo0 - pad, hi = hi0 + pad, left = 44, right = 318, top = 20, bot = 154;
+  const t0 = parseD(pts[0].d).getTime(), t1 = parseD(pts[pts.length - 1].d).getTime(), span = t1 - t0;
+  const X = p => span > 0 ? left + 8 + (parseD(p.d).getTime() - t0) / span * (right - left - 16) : (left + right) / 2;
+  const Y = v => o.better === 'low' ? top + (v - lo) / (hi - lo) * (bot - top) : bot - (v - lo) / (hi - lo) * (bot - top);
+  const best = o.better === 'low' ? lo0 : hi0, small = pts.length > 40;
+  let g = '<svg class="chart c-' + o.cls + '" viewBox="0 0 326 190" role="img" aria-label="' + esc(o.label) + '">';
+  [0, 1, 2].forEach(k => { const v = lo + (hi - lo) * k / 2, y = Y(v); g += '<path class="grid" d="M' + left + ' ' + y.toFixed(1) + ' H' + right + '"/><text class="axis" text-anchor="end" x="38" y="' + (y + 4).toFixed(1) + '">' + o.fmt(v) + '</text>'; });
+  if (pts.length > 1) g += '<path class="sline" d="M' + pts.map(p => X(p).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join(' L') + '"/>';
+  let bestDone = false;
+  pts.forEach(p => {
+    const isBest = p.v === best && !bestDone; if (isBest) bestDone = true;
+    g += '<circle class="sdot" cx="' + X(p).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="' + (isBest ? 6 : small ? 2.5 : 4) + '"' + (isBest ? ' style="fill:#E0A800"' : '') + '/>';
+    if (isBest) g += '<text class="lbl" text-anchor="middle" x="' + Math.min(300, Math.max(50, X(p))).toFixed(1) + '" y="' + (Y(p.v) - 12).toFixed(1) + '">' + o.fmt(p.v) + '</text>';
+  });
+  const dl = d => d.slice(2, 4) + '.' + d.slice(5, 7) + '.' + d.slice(8);
+  g += '<text class="axis" text-anchor="start" x="' + left + '" y="182">' + dl(pts[0].d) + '</text>' + (pts.length > 1 ? '<text class="axis" text-anchor="end" x="' + right + '" y="182">' + dl(pts[pts.length - 1].d) + '</text>' : '');
+  return g + '</svg>';
 }
 function statTable(c1, c2, rows, cls) {
   return '<section class="card tbl c-' + cls + '" aria-label="평균과 최고 기록"><div class="trow th"><span></span><span>' + c1 + '</span><span>' + c2 + '</span></div>' +
@@ -1420,11 +1444,20 @@ function viewEx(id) {
   const e = S.settings.exercises.find(x => x.id === id);
   if (!e) return viewExList();
   if (e.minutes) return viewRun(e);
+  if (NAV.exall) {
+    const days = Object.keys(ix().ex[e.id] || {}).sort(), o = ix().ex[e.id] || {}, pts = days.map(d => ({ d: d, v: o[d] })).filter(p => p.v > 0);
+    const dec = e.decimals || 0, last = pts.length ? pts[pts.length - 1].v : null, best = pts.length ? Math.max.apply(null, pts.map(p => p.v)) : null;
+    let h2 = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl(true) + '<!--cols-->';
+    h2 += '<section class="card c-' + e.cls + '"><div class="ml">지금까지 기록 · ' + pts.length + '일</div><div class="big">' + (last == null ? dash : exVal(last, e)) + '</div>' +
+      '<div class="sm">' + (best == null ? '아직 기록이 없어요' : '하루 최고 ' + exVal(best, e) + ' · 맨 오른쪽이 가장 최근이에요') + '</div><div class="pacebox">' + allChart(pts, { cls: e.cls, fmt: v => fmtN(v, dec), better: 'high', label: '지금까지의 하루 기록' }) + '</div></section>';
+    h2 += bigBtn('logEx', e.id, e.cls, '기록 추가');
+    return h2 + '<!--col-->' + goalsCard(e);
+  }
   const r = NAV.range, info = RANGE[r], s = exStats(e);
   const bs = buckets(r, d => exSum(e.id, d), 'sum');
   const avg = bucketAvg(bs) || 0;
   const dec = e.decimals || 0;
-  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl() + '<!--cols-->';
+  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl(true) + '<!--cols-->';
   h += '<section class="card c-' + e.cls + '"><div class="ml">' + info.avgLabel + '</div><div class="big">' + exVal(avg, e) + '<span class="u">' + info.per + '</span></div>' +
     '<div class="sm">' + info.sumLabel + ' ' + exVal(bucketSum(bs), e) + '</div>';
   if (r === 'week') {
@@ -1448,13 +1481,27 @@ function viewEx(id) {
 }
 
 /* ---------- 러닝 (기록 중심) ---------- */
+function viewRunAll(e) {
+  const rs = runStats(e), m = NAV.rm === 'dist' ? 'dist' : 'pace', recs = (S.logs.ex[e.id] || []).slice().sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  const pts = (m === 'pace' ? recs.filter(x => x.m > 0 && x.v > 0).map(x => ({ d: x.d, v: x.m / x.v })) : recs.filter(x => x.v > 0).map(x => ({ d: x.d, v: x.v })));
+  const last = pts.length ? pts[pts.length - 1].v : null, best = pts.length ? (m === 'pace' ? Math.min : Math.max).apply(null, pts.map(p => p.v)) : null;
+  const fm = v => m === 'pace' ? fmtPace(v) : fmtN(v, 1);
+  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl(true) + '<!--cols-->';
+  h += '<section class="card c-' + e.cls + '"><div class="ml">지금까지 기록 · ' + pts.length + '회</div><div class="big">' + (last == null ? dash : fm(last) + '<span class="u">' + (m === 'pace' ? '/km' : 'km') + '</span>') + '</div>' +
+    '<div class="sm">' + (best == null ? '아직 기록이 없어요' : '가장 좋은 기록 ' + fm(best) + (m === 'pace' ? ' /km' : ' km') + ' · 맨 오른쪽이 가장 최근이에요') + '</div>' +
+    '<div class="chipsel" role="group" aria-label="보기">' + [['pace', '페이스'], ['dist', '거리']].map(x => '<button type="button" class="cs' + (m === x[0] ? ' on' : '') + '" data-act="runMetric" data-arg="' + x[0] + '" aria-pressed="' + (m === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<div class="pacebox">' + allChart(pts, { cls: e.cls, fmt: fm, better: m === 'pace' ? 'low' : 'high', label: '지금까지의 ' + (m === 'pace' ? '페이스' : '거리') + ' 기록', empty: m === 'pace' ? '시간을 함께 기록하면 페이스 그래프가 그려져요.' : '' }) + '</div>' + (m === 'pace' ? '<div class="sm cap">위쪽이 더 빨라요</div>' : '') + '</section>';
+  h += bigBtn('logEx', e.id, e.cls, '기록 추가');
+  return h + '<!--col-->' + goalsCard(e);
+}
 function viewRun(e) {
+  if (NAV.exall) return viewRunAll(e);
   const r = NAV.range, rs = runStats(e), items = paceBuckets(e, r);
   const set = [].concat.apply([], bucketDays(r).map(b => b.days));
   const inRange = rs.all.filter(x => set.indexOf(x.d) >= 0);
   const pRange = paceOf(inRange), fast = inRange.length ? Math.min.apply(null, inRange.map(x => x.m / x.v)) : null;
   const label = { week: '7일 평균 페이스', month: '5주 평균 페이스', half: '6개월 평균 페이스' }[r];
-  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl() + '<!--cols-->';
+  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl(true) + '<!--cols-->';
   h += '<section class="card c-' + e.cls + '"><div class="ml">' + label + '</div><div class="big">' + (pRange == null ? dash : fmtPace(pRange) + '<span class="u">/km</span>') + '</div>' +
     '<div class="sm">' + (inRange.length ? inRange.length + '회 기록 · 가장 빠른 페이스 ' + fmtPace(fast) + ' /km' : '이 기간에 시간을 적은 기록이 없어요') + '</div>' +
     '<div class="pacebox">' + paceChart(items) + '</div>' + (rs.all.length ? '<div class="sm cap">위쪽이 더 빨라요 · 점이 없는 곳은 기록이 없는 구간이에요</div>' : '') + '</section>';
@@ -2885,7 +2932,9 @@ const ACT = {
   },
   toggleCat(arg) { NAV.open[arg] = !NAV.open[arg]; render(); },
   toggleAll(arg) { NAV.open['all:' + arg] = !NAV.open['all:' + arg]; render(); },
-  range(arg) { NAV.range = arg; render(); },
+  range(arg) { NAV.range = arg; NAV.exall = false; render(); },
+  exAll() { NAV.exall = true; render(); },
+  runMetric(arg) { NAV.rm = arg; render(); },
   gpick(arg) { NAV.arg = arg; render(); },
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
   logEx(arg) { sheetLogEx(arg); },
