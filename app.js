@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 49;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 50;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1902,16 +1902,22 @@ function catTile(c, ym) {
   return h + '</div>';
 }
 const moneyMonth = () => { const c = monthOf(0); return NAV.mm && NAV.mm < c ? NAV.mm : c; };
+const xd = d => (+d.slice(5, 7)) + '.' + (+d.slice(8));
+const xwon = n => fmtN(n, 0);
+function xrow(act, arg, cells, cls) {   // 엑셀처럼 한 줄에 칸 4개
+  return '<button type="button" class="xr' + (cls ? ' ' + cls : '') + '" data-act="' + act + '" data-arg="' + esc(arg) + '">' + cells.map((c, k) => '<span class="' + (k === 3 || (cls && cls.indexOf('cat') >= 0 && k > 0) ? 'n' : 'c') + '">' + c + '</span>').join('') + '</button>';
+}
+const xhead = (a, b, c, d, cls) => '<div class="xh' + (cls ? ' ' + cls : '') + '"><span>' + a + '</span><span>' + b + '</span><span>' + c + '</span><span' + (cls ? ' class="n"' : '') + '>' + d + '</span></div>';
 function moneyRows(lm, q) {
   const mdD = monthData(lm), qq = String(q || '').trim().toLowerCase();
   let items = mdD.exp.concat(mdD.corp, mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
   if (qq) items = items.filter(x => ((x.memo || '') + ' ' + (x.t === 'inc' ? '수입' : x.inv ? '투자' : x.corp ? '회사카드' : catName(x.cat))).toLowerCase().indexOf(qq) >= 0);
-  let rows = '', lastD = null;
-  items.forEach(x => {
-    if (x.d !== lastD) { lastD = x.d; const sp = spendOn(x.d); rows += '<div class="dgh"><span>' + dateLabel(x.d) + '</span><span>' + (sp > 0 ? '−' + won(sp) : '') + '</span></div>'; }
-    rows += x.t === 'inc' ? entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc') : expRow(x);
-  });
-  return rows || '<div class="emptyrow">' + (qq ? '찾는 내역이 없어요.' : '이 달 내역이 없어요.') + '</div>';
+  if (!items.length) return '<div class="emptyrow">' + (qq ? '찾는 내역이 없어요.' : '이 달 내역이 없어요.') + '</div>';
+  return '<div class="xl">' + xhead('날짜', '내용', '분류', '금액') + items.map(x => {
+    if (x.t === 'inc') return xrow('editEntry', 'inc|' + x.id, [xd(x.d), esc(x.memo || '수입'), '수입', '+' + xwon(x.amt)], 'inc');
+    const kind = x.inv ? '투자' : x.corp ? '회사카드' : catName(x.cat) + (x.sub && S.settings.subOn ? '·' + esc(subName(x.cat, x.sub)) : '');
+    return xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || (x.inv || x.corp ? kind : catName(x.cat))), kind, '−' + xwon(x.amt)], x.inv || x.corp ? 'dim' : '');
+  }).join('') + '</div>';
 }
 function viewMoney() {
   const realCur = monthOf(0), cur = moneyMonth(), isNow = cur === realCur, mlabel = isNow ? '이번 달' : (+cur.slice(5)) + '월';
@@ -1929,8 +1935,13 @@ function viewMoney() {
   h += '<!--cols-->' + '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">월별 통계</span><span class="l2r">' + (D.income > 0 ? '수입 ' + won(D.income) + ' · 남는 돈 ' + swon(rest) : '수입·지출·투자 한눈에') + '</span>' + CHEV + '</a>';
   const catRows = st.cats.map(c => ({ c: c, sp: catSpentMonth(c.id, cur) })).sort((a, b) => b.sp - a.sp), allCats = !!NAV.catAll;
   const catShown = allCats ? catRows : catRows.filter(x => x.sp > 0).slice(0, 5), catHidden = catRows.length - catShown.length;
-  h += '<section class="card c-money" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + mlabel + '</div>' + editLink('money') + '</div>' +
-    (st.cats.length ? (catShown.length ? '<div class="ctiles">' + catShown.map(x => catTile(x.c, cur)).join('') + '</div>' : '<div class="emptyrow">쓴 돈이 아직 없어요.</div>') +
+  const catTbl = catShown.map(x => { const c = x.c, cb = budgetCat(c, cur), over = cb > 0 && x.sp > cb, subs = S.settings.subOn && c.subs.length > 0, open = !!NAV.open[c.id] && subs;
+    let r = '<button type="button" class="xr cat' + (over ? ' over' : '') + '" data-act="' + (subs ? 'toggleCat' : 'noop') + '" data-arg="' + c.id + '"><span class="c">' + esc(c.name) + (subs ? ' ▾' : '') + '</span><span class="n">' + xwon(x.sp) + '</span><span class="n sub">' + (cb > 0 ? xwon(cb) : '–') + '</span><span class="n' + (over ? ' neg' : '') + '">' + (cb > 0 ? xwon(cb - x.sp) : '') + '</span></button>';
+    if (open) { const un = subSpentMonth(c.id, '', cur), sr = (n, v) => '<div class="xr cat subr"><span class="c">· ' + n + '</span><span class="n">' + xwon(v) + '</span><span></span><span></span></div>'; r += c.subs.map(y => sr(esc(y.name), subSpentMonth(c.id, y.id, cur))).join('') + (un > 0 ? sr('미분류', un) : ''); }
+    return r; }).join('');
+  const catTot = '<div class="xr cat tot"><span class="c">합계</span><span class="n">' + xwon(D.spent) + '</span><span class="n sub">' + (budget > 0 ? xwon(budget) : '–') + '</span><span class="n' + (left < 0 ? ' neg' : '') + '">' + (budget > 0 ? xwon(left) : '') + '</span></div>';
+  h += '<section class="card c-money xcard" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + mlabel + '</div>' + editLink('money') + '</div>' +
+    (st.cats.length ? (catShown.length ? '<div class="xl">' + xhead('카테고리', '지출', '예산', '남음', 'cat') + catTbl + catTot + '</div>' : '<div class="emptyrow">쓴 돈이 아직 없어요.</div>') +
       (catHidden > 0 || allCats ? '<button type="button" class="dashbtn" data-act="catAll">' + (allCats ? '접기' : '전체 ' + st.cats.length + '개 보기') + '</button>' : '') : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section>';
   const lm = cur, mdD = monthData(lm);
   const hist = '<div class="searchbar"><input type="search" id="mq" class="tin" value="' + esc(NAV.mq || '') + '" placeholder="내역 검색 (메모·카테고리)" autocomplete="off" enterkeyhint="search" aria-label="내역 검색" data-inp="msearch"></div>' +
@@ -1940,17 +1951,15 @@ function viewMoney() {
   const inv = '<section class="group c-faith"><div class="gh">' + (+imM.slice(5)) + '월 투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + (+imM.slice(5)) + '월 투자</div><div class="gl2">' + won(ID.invSum) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
     '<div class="invbars">' + miniBars(im6.map(m => monthData(m).invSum), im6.map(m => (+m.slice(5)) + '월')) + '</div>' +
-    ID.invs.slice().sort(byDateDesc).map(x => entryRow('exp|' + x.id, esc(x.memo || '투자'), dateLabel(x.d), '−' + won(x.amt), 'corpamt')).join('') +
-    (ID.invs.length ? '' : '<div class="emptyrow">이 달 투자 내역이 없어요.</div>') +
+    (ID.invs.length ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + ID.invs.slice().sort(byDateDesc).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '투자'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '<div class="emptyrow">이 달 투자 내역이 없어요.</div>') +
     '<button type="button" class="addrow" data-act="logInv">' + ico('plus', 18, 2) + '투자 추가</button></section>';
   const corpAll = S.logs.exp.filter(x => x.corp).sort(byDateDesc), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === cur).map(x => x.amt));
   const corp = '<section class="group c-money"><div class="gh">회사카드 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + (+cur.slice(5)) + '월 사용</div><div class="gl2">' + won(corpMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(corpAll.map(x => x.amt))) + '</div></div></div>' +
-    corpAll.slice(0, 5).map(x => entryRow('exp|' + x.id, esc(x.memo || '회사카드'), dateLabel(x.d), '−' + won(x.amt), 'corpamt')).join('') +
+    (corpAll.length ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + corpAll.slice(0, 15).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '회사카드'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '') +
     '<button type="button" class="addrow" data-act="logCorp">' + ico('plus', 18, 2) + '회사카드 사용 추가</button></section>';
   const fx = st.fixed, fxSum = sum(fx.map(f => f.amt));
-  const fixd = '<section class="group c-money"><div class="gh">고정 지출 <span class="hint">매달 정해진 날 자동으로 입력돼요' + (fx.length ? ' · 합계 ' + won(fxSum) : '') + '</span></div>' + fx.map(f =>
-    '<button type="button" class="erow" data-act="editFixed" data-arg="' + f.id + '"><span class="el"><span class="e1">' + esc(f.name) + '</span><span class="e2">매월 ' + f.day + '일 · ' + esc(catName(f.cat)) + (f.sub ? ' · ' + esc(subName(f.cat, f.sub)) : '') + '</span></span><span class="er">' + won(f.amt) + '</span></button>').join('') +
+  const fixd = '<section class="group c-money"><div class="gh">고정 지출 <span class="hint">매달 정해진 날 자동으로 입력돼요' + (fx.length ? ' · 합계 ' + won(fxSum) : '') + '</span></div>' + (fx.length ? '<div class="xl">' + xhead('매월', '이름', '분류', '금액') + fx.map(f => xrow('editFixed', f.id, [f.day + '일', esc(f.name), esc(catName(f.cat)), xwon(f.amt)], '')).join('') + '</div>' : '') +
     '<button type="button" class="addrow" data-act="addFixed">' + ico('plus', 18, 2) + '고정 지출 추가</button></section>';
   const mt = ['hist', 'inv', 'corp', 'fix'].indexOf(NAV.mt) >= 0 ? NAV.mt : 'hist';
   h += '<!--col-->' + '<div class="seg rangeseg" role="group" aria-label="보기">' + [['hist', '내역'], ['inv', '투자'], ['corp', '회사카드'], ['fix', '고정지출']].map(x => '<button type="button" data-act="moneyTab" data-arg="' + x[0] + '" aria-pressed="' + (mt === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' + (mt === 'hist' ? hist : mt === 'inv' ? inv : mt === 'corp' ? corp : fixd);
@@ -2931,6 +2940,7 @@ const ACT = {
   budgetEdit(arg) { numSheet(ymLabel(arg) + ' 예산', '금액 (원)', budgetTotal(arg), v => { ensureBudget(arg).total = clamp(v, 0, 50000000); }); },
   moreToggle(arg, el) { const w = byId('morewrap'); if (!w) return; const open = w.style.display === 'none'; w.style.display = open ? 'block' : 'none'; el.setAttribute('aria-expanded', String(open)); el.classList.toggle('open', open); },
   saveMore() { if (!SHEET || !SHEET.onSave) return; SHEET.more = true; SHEET.onSave(); if (SHEET) SHEET.more = false; },
+  noop() {},
   catAll() { NAV.catAll = !NAV.catAll; render(); },
   moneyTab(arg) { NAV.mt = arg; render(); },
   amtAdd(arg) { const v = (readMoney('f-amt') || 0) + Number(arg), el = byId('f-amt'); if (el) { el.value = fmtN(v, 0); el.focus(); } },
