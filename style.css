@@ -924,7 +924,7 @@ html[data-side] .bkhero{height:300px}
 .xr .c{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .xr .n{text-align:right;font-weight:600;white-space:nowrap}
 .xr .sub,.xr .c:nth-child(3){color:var(--sub);font-weight:400}
-.xr.inc .n{color:var(--ok,#1B8A4B)}
+.xr.inc .n{color:var(--good)}
 .xr.dim .n{color:var(--sub)}
 .xh.cat,.xr.cat{grid-template-columns:minmax(0,1fr) 78px 78px 78px}
 .xh.cat span:nth-child(n+2){text-align:right}
@@ -936,13 +936,18 @@ html[data-side] .bkhero{height:300px}
 /* v51: 예산 표시 끄기 */
 .xl.nob .xh.cat,.xl.nob .xr.cat{grid-template-columns:minmax(0,1fr) 110px}
 
-/* v52: PC·태블릿에서 이름과 금액이 멀어지지 않게 */
+/* v52~v53: PC·태블릿 비율 정리 */
 @media (min-width:700px){
-  .xl{max-width:500px}
+  html[data-side] .twocol:has(.xcard){grid-template-columns:minmax(360px,5fr) minmax(0,6fr);max-width:1040px;margin-inline:auto}
   .xh,.xr{grid-template-columns:48px minmax(0,1fr) 92px 104px}
-  .xh.cat,.xr.cat{grid-template-columns:minmax(0,1fr) 96px 96px 96px}
-  .xl:has(.xh.cat){max-width:460px}
-  .xl.nob .xh.cat,.xl.nob .xr.cat{grid-template-columns:minmax(0,1fr) 110px}
-  .xl.nob:has(.xh.cat){max-width:300px}
+  .xh.cat,.xr.cat{grid-template-columns:minmax(0,1fr) 92px 92px 92px}
+  .xl.nob .xh.cat,.xl.nob .xr.cat{grid-template-columns:minmax(0,1fr) 120px}
   .xr{min-height:34px;font-size:14px}
 }
+.vhd{display:flex;align-items:center;gap:10px}
+.mseg{display:inline-flex;background:var(--track2);border-radius:8px;padding:2px}
+.mseg button{border:0;background:transparent;color:var(--sub);font:inherit;font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.mseg button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.big .lnkb{border:0;background:transparent;padding:0;font:inherit;font-size:.5em;font-weight:500;color:var(--sub);margin-left:6px}
+.sm.cap b.neg{color:var(--bad)}.sm.cap b.inc{color:var(--good)}
+.xr .n.inc{color:var(--good)}
