@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 53;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 54;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1912,8 +1912,8 @@ function xrow(act, arg, cells, cls) {   // 엑셀처럼 한 줄에 칸 4개
 const xhead = (a, b, c, d, cls) => '<div class="xh' + (cls ? ' ' + cls : '') + '"><span>' + a + '</span><span>' + b + '</span><span>' + c + '</span><span' + (cls ? ' class="n"' : '') + '>' + d + '</span></div>';
 function moneyRows(lm, q) {
   const mdD = monthData(lm), qq = String(q || '').trim().toLowerCase();
-  let items = mdD.exp.concat(mdD.corp, mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
-  if (qq) items = items.filter(x => ((x.memo || '') + ' ' + (x.t === 'inc' ? '수입' : x.inv ? '투자' : x.corp ? '회사카드' : catName(x.cat))).toLowerCase().indexOf(qq) >= 0);
+  let items = mdD.exp.concat(mdD.invs).map(x => Object.assign({ t: 'exp' }, x)).concat(mdD.inc.map(x => Object.assign({ t: 'inc' }, x))).sort(byDateDesc);
+  if (qq) items = items.filter(x => ((x.memo || '') + ' ' + (x.t === 'inc' ? '수입' : x.inv ? '투자' : catName(x.cat))).toLowerCase().indexOf(qq) >= 0);
   if (!items.length) return '<div class="emptyrow">' + (qq ? '찾는 내역이 없어요.' : '이 달 내역이 없어요.') + '</div>';
   return '<div class="xl">' + xhead('날짜', '내용', '분류', '금액') + items.map(x => {
     if (x.t === 'inc') return xrow('editEntry', 'inc|' + x.id, [xd(x.d), esc(x.memo || '수입'), '수입', '+' + xwon(x.amt)], 'inc');
