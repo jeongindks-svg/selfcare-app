@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 52;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 53;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -69,7 +69,7 @@ function defaultState() {
         { id: 'push', name: '팔굽혀펴기', unit: '회', goal: 40, weekly: 200, cls: 'push', kind: 'strength', decimals: 0, minutes: false, goals: [] }
       ],
       sleepGoal: 7, rate: true,
-      monthly: 800000, subOn: false, showBudget: true, monthBudgets: {}, cmpCats: [], bible: null,
+      monthly: 800000, subOn: false, showBudget: true, catView: 'budget', monthBudgets: {}, cmpCats: [], bible: null,
       wheel: [{ id: 'w1', name: '말씀', on: true }, { id: 'w2', name: '기도', on: true }, { id: 'w3', name: '교제', on: true }, { id: 'w4', name: '증거', on: true }],
       cats: [
         { id: 'c1', name: '식비', monthly: 300000, subs: [] }, { id: 'c2', name: '교통', monthly: 100000, subs: [] },
@@ -108,6 +108,7 @@ function normalize(o) {
   ['ex', 'sleep', 'faith', 'nospend', 'bible', 'wheel'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
   if (typeof s.settings.showBudget !== 'boolean') s.settings.showBudget = true;
+  if (['budget', 'prev', 'none'].indexOf(s.settings.catView) < 0) s.settings.catView = s.settings.showBudget ? 'budget' : 'none';
   if (typeof s.settings.subOn !== 'boolean') s.settings.subOn = s.logs.exp.some(x => x && x.sub);   // 세부 항목은 쓰던 사람만 켜 둬요
   ['bucket', 'wish', 'plans', 'todos', 'reminders', 'sched'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
@@ -1922,27 +1923,32 @@ function moneyRows(lm, q) {
 }
 function viewMoney() {
   const realCur = monthOf(0), cur = moneyMonth(), isNow = cur === realCur, mlabel = isNow ? '이번 달' : (+cur.slice(5)) + '월';
-  const st = S.settings, sb = st.showBudget !== false, D = monthData(cur), P = monthData(monthShift(cur, -1)), now = new Date();
+  const st = S.settings, view = ['budget', 'prev', 'none'].indexOf(st.catView) >= 0 ? st.catView : 'budget', sb = view === 'budget', pv = view === 'prev', pm = monthShift(cur, -1), D = monthData(cur), P = monthData(pm), now = new Date();
   const budget = budgetTotal(cur), pct = budget > 0 ? D.spent / budget * 100 : 0, left = budget - D.spent;
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
   const rest = D.income - D.spent - D.invSum;
   let h = backHdr('가계부', 'money', 'money', editLink('money')) + '<!--cols-->';
   h += '<div class="btnpair"><button type="button" class="btn c-money" data-act="logMoney" data-arg="">지출 추가</button><button type="button" class="btn ghost c-money" data-act="logIncome" data-arg="">수입 추가</button></div>';
   h += monthNav(ymLabel(cur), 'mmMonth', !isNow);
-  h += '<section class="card c-money" aria-label="이번 달"><div class="bigrow"><div class="a1">' + (isNow ? ymNow() : mlabel) + ' 지출</div><div class="sm nm">' + (!sb ? '' : left >= 0 ? '남은 예산 ' + won(left) : '예산 초과 ' + won(-left)) + '</div></div>' +
-    '<div class="big">' + won(D.spent) + (sb ? '<span class="u">/ ' + won(budget) + '</span>' : '') + '</div>' + (sb ? '<div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' : '') +
-    (!sb ? '<div class="sm cap">' + (P.spent > 0 ? '전달 ' + won(P.spent) + ' · ' : '') + '<button type="button" class="lnk" data-act="tgBudget">예산 보기</button></div>' : '<div class="sm cap">' + (isNow ? (left > 0 ? '남은 ' + daysLeft + '일 동안 하루 ' + won(Math.floor(left / daysLeft)) + '까지 쓸 수 있어요' : '이번 달 예산을 다 썼어요') : '예산의 ' + Math.round(pct) + '%를 썼어요') + (P.spent > 0 ? ' · 전달 ' + won(P.spent) : '') + ' · <button type="button" class="lnk" data-act="budgetEdit" data-arg="' + cur + '">예산 바꾸기</button> · <button type="button" class="lnk" data-act="tgBudget">숨기기</button></div>') +
-    '</section>';
+  const dd = D.spent - P.spent, dcls = dd > 0 ? 'neg' : 'inc';
+  h += '<section class="card c-money" aria-label="이번 달"><div class="bigrow"><div class="a1">' + (isNow ? ymNow() : mlabel) + ' 지출</div><div class="sm nm">' +
+    (sb ? (left >= 0 ? '남은 ' + won(left) : '초과 ' + won(-left)) : pv ? '전달 ' + won(P.spent) : '') + '</div></div>' +
+    '<div class="big">' + won(D.spent) + (sb ? '<button type="button" class="u lnkb" data-act="budgetEdit" data-arg="' + cur + '" aria-label="예산 바꾸기">/ ' + won(budget) + '</button>' : '') + '</div>' +
+    (sb ? '<div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' : '') +
+    (sb ? '<div class="sm cap">' + (isNow && left > 0 ? daysLeft + '일 남음 · 하루 ' + won(Math.floor(left / daysLeft)) : Math.round(pct) + '%') + '</div>'
+      : pv ? '<div class="sm cap">' + (P.spent > 0 ? '전달보다 <b class="' + dcls + '">' + (dd > 0 ? '+' : dd < 0 ? '−' : '') + won(Math.abs(dd)) + '</b>' : '전달 기록 없음') + '</div>' : '') + '</section>';
   h += '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">월별 통계</span><span class="l2r">' + (D.income > 0 ? '수입 ' + won(D.income) + ' · 남는 돈 ' + swon(rest) : '수입·지출·투자 한눈에') + '</span>' + CHEV + '</a>';
-  const catRows = st.cats.map(c => ({ c: c, sp: catSpentMonth(c.id, cur) })).sort((a, b) => b.sp - a.sp), allCats = !!NAV.catAll;
-  const catShown = allCats ? catRows : catRows.filter(x => x.sp > 0).slice(0, 5), catHidden = catRows.length - catShown.length;
-  const catTbl = catShown.map(x => { const c = x.c, cb = budgetCat(c, cur), over = sb && cb > 0 && x.sp > cb, subs = S.settings.subOn && c.subs.length > 0, open = !!NAV.open[c.id] && subs;
-    let r = '<button type="button" class="xr cat' + (over ? ' over' : '') + '" data-act="' + (subs ? 'toggleCat' : 'noop') + '" data-arg="' + c.id + '"><span class="c">' + esc(c.name) + (subs ? ' ▾' : '') + '</span><span class="n">' + xwon(x.sp) + '</span>' + (sb ? '<span class="n sub">' + (cb > 0 ? xwon(cb) : '–') + '</span><span class="n' + (over ? ' neg' : '') + '">' + (cb > 0 ? xwon(cb - x.sp) : '') + '</span>' : '') + '</button>';
-    if (open) { const un = subSpentMonth(c.id, '', cur), sr = (n, v) => '<div class="xr cat subr"><span class="c">· ' + n + '</span><span class="n">' + xwon(v) + '</span>' + (sb ? '<span></span><span></span>' : '') + '</div>'; r += c.subs.map(y => sr(esc(y.name), subSpentMonth(c.id, y.id, cur))).join('') + (un > 0 ? sr('미분류', un) : ''); }
+  const catRows = st.cats.map(c => ({ c: c, sp: catSpentMonth(c.id, cur), pp: pv ? catSpentMonth(c.id, pm) : 0 })).sort((a, b) => b.sp - a.sp || b.pp - a.pp), allCats = !!NAV.catAll;
+  const catShown = allCats ? catRows : catRows.filter(x => x.sp > 0 || x.pp > 0).slice(0, 6), catHidden = catRows.length - catShown.length;
+  const dlt = n => n === 0 ? '–' : (n > 0 ? '+' : '−') + xwon(Math.abs(n));
+  const catTbl = catShown.map(x => { const c = x.c, cb = budgetCat(c, cur), over = sb && cb > 0 && x.sp > cb, subs = S.settings.subOn && c.subs.length > 0, open = !!NAV.open[c.id] && subs, d = x.sp - x.pp;
+    let r = '<button type="button" class="xr cat' + (over ? ' over' : '') + '" data-act="' + (subs ? 'toggleCat' : 'noop') + '" data-arg="' + c.id + '"><span class="c">' + esc(c.name) + (subs ? ' ▾' : '') + '</span><span class="n">' + xwon(x.sp) + '</span>' +
+      (sb ? '<span class="n sub">' + (cb > 0 ? xwon(cb) : '–') + '</span><span class="n' + (over ? ' neg' : '') + '">' + (cb > 0 ? xwon(cb - x.sp) : '') + '</span>' : pv ? '<span class="n sub">' + xwon(x.pp) + '</span><span class="n ' + (d > 0 ? 'neg' : d < 0 ? 'inc' : 'sub') + '">' + dlt(d) + '</span>' : '') + '</button>';
+    if (open) { const un = subSpentMonth(c.id, '', cur), sr = (n, v) => '<div class="xr cat subr"><span class="c">· ' + n + '</span><span class="n">' + xwon(v) + '</span>' + (sb || pv ? '<span></span><span></span>' : '') + '</div>'; r += c.subs.map(y => sr(esc(y.name), subSpentMonth(c.id, y.id, cur))).join('') + (un > 0 ? sr('미분류', un) : ''); }
     return r; }).join('');
-  const catTot = '<div class="xr cat tot"><span class="c">합계</span><span class="n">' + xwon(D.spent) + '</span>' + (sb ? '<span class="n sub">' + (budget > 0 ? xwon(budget) : '–') + '</span><span class="n' + (left < 0 ? ' neg' : '') + '">' + (budget > 0 ? xwon(left) : '') + '</span>' : '') + '</div>';
-  h += '<section class="card c-money xcard" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + mlabel + '</div><span><button type="button" class="lnk" data-act="tgBudget">' + (sb ? '예산 숨기기' : '예산 보기') + '</button> · ' + editLink('money') + '</span></div>' +
-    (st.cats.length ? (catShown.length ? '<div class="xl' + (sb ? '' : ' nob') + '">' + (sb ? xhead('카테고리', '지출', '예산', '남음', 'cat') : xhead('카테고리', '지출', '', '', 'cat nob')) + catTbl + catTot + '</div>' : '<div class="emptyrow">쓴 돈이 아직 없어요.</div>') +
+  const catTot = '<div class="xr cat tot"><span class="c">합계</span><span class="n">' + xwon(D.spent) + '</span>' + (sb ? '<span class="n sub">' + (budget > 0 ? xwon(budget) : '–') + '</span><span class="n' + (left < 0 ? ' neg' : '') + '">' + (budget > 0 ? xwon(left) : '') + '</span>' : pv ? '<span class="n sub">' + xwon(P.spent) + '</span><span class="n ' + (dd > 0 ? 'neg' : dd < 0 ? 'inc' : 'sub') + '">' + dlt(dd) + '</span>' : '') + '</div>';
+  h += '<section class="card c-money xcard" aria-label="카테고리별 지출"><div class="sh2"><div class="a1b">카테고리 · ' + mlabel + '</div><span class="vhd"><span class="mseg" role="group" aria-label="표시">' + [['budget', '예산'], ['prev', '전달'], ['none', '지출']].map(x => '<button type="button" data-act="catView" data-arg="' + x[0] + '" aria-pressed="' + (view === x[0]) + '">' + x[1] + '</button>').join('') + '</span>' + editLink('money') + '</span></div>' +
+    (st.cats.length ? (catShown.length ? '<div class="xl' + (sb || pv ? '' : ' nob') + '">' + (sb ? xhead('카테고리', '지출', '예산', '남음', 'cat') : pv ? xhead('카테고리', '지출', '전달', '증감', 'cat') : xhead('카테고리', '지출', '', '', 'cat nob')) + catTbl + catTot + '</div>' : '<div class="emptyrow">쓴 돈이 아직 없어요.</div>') +
       (catHidden > 0 || allCats ? '<button type="button" class="dashbtn" data-act="catAll">' + (allCats ? '접기' : '전체 ' + st.cats.length + '개 보기') + '</button>' : '') : '<div class="emptyrow">카테고리가 없어요. 편집에서 추가해 보세요.</div>') + '</section>';
   const lm = cur, mdD = monthData(lm);
   const hist = '<div class="searchbar"><input type="search" id="mq" class="tin" value="' + esc(NAV.mq || '') + '" placeholder="내역 검색 (메모·카테고리)" autocomplete="off" enterkeyhint="search" aria-label="내역 검색" data-inp="msearch"></div>' +
@@ -2942,6 +2948,7 @@ const ACT = {
   moreToggle(arg, el) { const w = byId('morewrap'); if (!w) return; const open = w.style.display === 'none'; w.style.display = open ? 'block' : 'none'; el.setAttribute('aria-expanded', String(open)); el.classList.toggle('open', open); },
   saveMore() { if (!SHEET || !SHEET.onSave) return; SHEET.more = true; SHEET.onSave(); if (SHEET) SHEET.more = false; },
   noop() {},
+  catView(arg) { S.settings.catView = arg; S.settings.showBudget = arg !== 'none'; commit(); render(); },
   tgBudget() { S.settings.showBudget = !(S.settings.showBudget !== false); commit(); render(); },
   catAll() { NAV.catAll = !NAV.catAll; render(); },
   moneyTab(arg) { NAV.mt = arg; render(); },
