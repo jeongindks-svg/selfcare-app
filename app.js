@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 54;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 55;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -69,10 +69,10 @@ function defaultState() {
         { id: 'push', name: '팔굽혀펴기', unit: '회', goal: 40, weekly: 200, cls: 'push', kind: 'strength', decimals: 0, minutes: false, goals: [] }
       ],
       sleepGoal: 7, rate: true,
-      monthly: 800000, subOn: false, showBudget: true, catView: 'budget', monthBudgets: {}, cmpCats: [], bible: null,
+      monthly: 800000, subOn: true, subV: 1, showBudget: true, catView: 'budget', monthBudgets: {}, cmpCats: [], bible: null,
       wheel: [{ id: 'w1', name: '말씀', on: true }, { id: 'w2', name: '기도', on: true }, { id: 'w3', name: '교제', on: true }, { id: 'w4', name: '증거', on: true }],
       cats: [
-        { id: 'c1', name: '식비', monthly: 300000, subs: [] }, { id: 'c2', name: '교통', monthly: 100000, subs: [] },
+        { id: 'c1', name: '식비', monthly: 300000, subs: [] }, { id: 'c2', name: '교통', monthly: 100000, subs: [{ id: 's1', name: '대중교통' }, { id: 's2', name: '택시' }, { id: 's3', name: '킥보드' }] },
         { id: 'c3', name: '카페', monthly: 80000, subs: [] }, { id: 'c4', name: '쇼핑', monthly: 100000, subs: [] },
         { id: 'c5', name: '헌금·기부', monthly: 100000, subs: [] }, { id: 'c6', name: '기타', monthly: 50000, subs: [] }
       ],
@@ -109,7 +109,12 @@ function normalize(o) {
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
   if (typeof s.settings.showBudget !== 'boolean') s.settings.showBudget = true;
   if (['budget', 'prev', 'none'].indexOf(s.settings.catView) < 0) s.settings.catView = s.settings.showBudget ? 'budget' : 'none';
-  if (typeof s.settings.subOn !== 'boolean') s.settings.subOn = s.logs.exp.some(x => x && x.sub);   // 세부 항목은 쓰던 사람만 켜 둬요
+  if (typeof s.settings.subOn !== 'boolean') s.settings.subOn = true;
+  if (!s.settings.subV) {   // 카테고리 → 세부 선택 흐름: 한 번만 켜고, 교통에 기본 선택지를 넣어 둬요
+    s.settings.subOn = true; s.settings.subV = 1;
+    const tr = s.settings.cats.find(c => c.name === '교통');
+    if (tr && !tr.subs.length) tr.subs = [{ id: 's' + uid(), name: '대중교통' }, { id: 's' + uid(), name: '택시' }, { id: 's' + uid(), name: '킥보드' }];
+  }
   ['bucket', 'wish', 'plans', 'todos', 'reminders', 'sched'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
   return s;
 }
@@ -2288,25 +2293,26 @@ function subChips(cid, sel) {
   return '<label>세부 항목 (선택)</label>' + chipsHtml('sub', [{ v: '', l: '선택 안 함' }].concat(c.subs.map(x => ({ v: x.id, l: x.name }))), sel || '');
 }
 const lastExpDate = () => { const t = todayStr(), d = S.lastExpDate; return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= t ? d : t; };
+const catHasSub = cid => { const c = S.settings.cats.find(x => x.id === cid); return !!(S.settings.subOn && c && c.subs.length); };
+/* 카테고리를 고르면 그 안의 선택지만 남겨요 (예: 교통 → 대중교통 · 택시 · 킥보드) */
+function catArea(v) {
+  const c = S.settings.cats.find(x => x.id === v.cat);
+  if (c && v.fold && catHasSub(v.cat)) return '<div class="fld"><label>카테고리</label><div class="chipsel" role="group"><button type="button" class="cs on" data-act="catUnfold" aria-label="카테고리 다시 고르기">' + esc(c.name) + ' ✕</button></div></div>' +
+    '<div class="fld">' + chipsHtml('sub', c.subs.map(x => ({ v: x.id, l: x.name })), v.sub || '') + '</div>';
+  return '<div class="fld"><label>카테고리</label>' + chipsHtml('cat', S.settings.cats.map(x => ({ v: x.id, l: x.name })), v.cat) + '</div>';
+}
 function sheetMoney(eid, corp) {
   const t = todayStr(), cats = S.settings.cats, cur = eid ? S.logs.exp.find(x => x.id === eid) : null;
   if (eid && !cur) return;
   const isCorp = cur ? !!(cur.corp || cur.inv) : !!corp;
-  const vals = { cat: cur && cur.cat ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '', pay: cur ? (cur.inv ? 'inv' : cur.corp ? 'corp' : 'mine') : (corp === 'inv' ? 'inv' : corp ? 'corp' : 'mine') };
+  const vals = { fold: !!(cur && cur.cat && cur.sub && catHasSub(cur.cat)), cat: cur && cur.cat ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '', pay: cur ? (cur.inv ? 'inv' : cur.corp ? 'corp' : 'mine') : (corp === 'inv' ? 'inv' : corp ? 'corp' : 'mine') };
   const showNo = !cur && !spendOn(t) && !S.logs.nospend[t];
   const d0 = cur ? cur.d : lastExpDate();
-  if (!cur && !corp) {   // 자주 쓰는 내역: 최근 두 달 동안 가장 많이 쓴 (메모·금액) 조합
-    const seen = {};
-    S.logs.exp.filter(x => !x.corp && !x.inv && x.memo && x.cat && x.d >= addDays(t, -60)).forEach(x => { const k = x.memo + '|' + x.amt + '|' + x.cat; (seen[k] = seen[k] || { memo: x.memo, amt: x.amt, cat: x.cat, sub: x.sub || '', n: 0, d: '' }); seen[k].n++; if (x.d > seen[k].d) seen[k].d = x.d; });
-    vals.recent = Object.keys(seen).map(k => seen[k]).sort((a, b) => b.n - a.n || (a.d < b.d ? 1 : -1)).slice(0, 5);
-    if (vals.recent.length) { const lastC = S.logs.exp.filter(x => !x.corp && !x.inv && x.cat).sort(byDateDesc)[0]; if (lastC && cats.some(c => c.id === lastC.cat)) { vals.cat = lastC.cat; vals.sub = lastC.sub || ''; } }
-  }
-  const quick = !cur && vals.recent && vals.recent.length ? '<div class="fld"><label>자주 쓰는 내역 · 눌러서 채우기</label><div class="chipsel" role="group">' + vals.recent.map((r, k) => '<button type="button" class="cs" data-act="quickFill" data-arg="' + k + '">' + esc(r.memo) + ' ' + fmtN(r.amt, 0) + '</button>').join('') + '</div></div>' : '';
+  if (!cur && !corp) { const lastC = S.logs.exp.filter(x => !x.corp && !x.inv && x.cat).sort(byDateDesc)[0]; if (lastC && cats.some(c => c.id === lastC.cat)) { vals.cat = lastC.cat; vals.sub = ''; } }
   const body = mfield('금액 (원)', 'f-amt', cur ? cur.amt : '', 'placeholder="0"') +
-    '<div class="chipsel qadd" role="group" aria-label="금액 더하기">' + [1000, 5000, 10000, 50000].map(n => '<button type="button" class="cs" data-act="amtAdd" data-arg="' + n + '">+' + (n >= 10000 ? n / 10000 + '만' : n / 1000 + '천') + '</button>').join('') + '</div>' + quick +
+    '<div class="chipsel qadd" role="group" aria-label="금액 더하기">' + [1000, 5000, 10000, 50000].map(n => '<button type="button" class="cs" data-act="amtAdd" data-arg="' + n + '">+' + (n >= 10000 ? n / 10000 + '만' : n / 1000 + '천') + '</button>').join('') + '</div>' +
     (cur ? '<div class="fld"><label>종류</label>' + chipsHtml('pay', [{ v: 'mine', l: '내 지출' }, { v: 'corp', l: '회사카드' }, { v: 'inv', l: '투자' }], vals.pay) + '</div>' : '') +
-    '<div id="catwrap" style="display:' + (isCorp ? 'none' : 'block') + '"><div class="fld"><label>카테고리</label>' + chipsHtml('cat', cats.map(c => ({ v: c.id, l: c.name })), vals.cat) + '</div>' +
-    '<div class="fld" id="subwrap">' + subChips(vals.cat, vals.sub) + '</div></div>' +
+    '<div id="catwrap" style="display:' + (isCorp ? 'none' : 'block') + '">' + catArea(vals) + '</div>' +
     (cur ? '' : '<button type="button" class="foldrow" data-act="moreToggle" aria-expanded="false"><span>메모 · 날짜</span><span class="fsum">' + (d0 === t ? '오늘' : md(d0)) + '</span>' + CHEV + '</button>') +
     '<div id="morewrap" style="display:' + (cur ? 'block' : 'none') + '">' + field('메모 (선택)', 'f-memo', 'text', cur ? cur.memo : '', 'maxlength="40" placeholder="예: 점심 · 투자라면 종목 이름"') +
     field('날짜', 'f-date', 'date', d0, 'max="' + t + '"') + '<div class="chipsel qadd" role="group" aria-label="날짜 바로 고르기"><button type="button" class="cs" data-act="dateSet" data-arg="0">오늘</button><button type="button" class="cs" data-act="dateSet" data-arg="1">어제</button><button type="button" class="cs" data-act="dateSet" data-arg="2">그저께</button></div>' + (!cur && d0 !== t ? '<p class="fhint">마지막으로 입력한 날짜(' + md(d0) + ')로 맞춰 뒀어요.</p>' : '') + '</div>' +
@@ -2325,7 +2331,7 @@ function sheetMoney(eid, corp) {
     if (SHEET.more) { commit(); toast('저장했어요'); render(); sheetMoney(undefined, corp); return; }
     done();
   }, { vals: vals, focus: !cur, onPick: grp => {
-    if (grp === 'cat') { SHEET.vals.sub = ''; const w = byId('subwrap'); if (w) w.innerHTML = subChips(SHEET.vals.cat, ''); }
+    if (grp === 'cat') { SHEET.vals.sub = ''; SHEET.vals.fold = catHasSub(SHEET.vals.cat); const w = byId('catwrap'); if (w) w.innerHTML = catArea(SHEET.vals); }
     if (grp === 'pay') { const w = byId('catwrap'); if (w) w.style.display = SHEET.vals.pay !== 'mine' ? 'none' : 'block'; }
   } });
 }
@@ -2954,17 +2960,7 @@ const ACT = {
   moneyTab(arg) { NAV.mt = arg; render(); },
   amtAdd(arg) { const v = (readMoney('f-amt') || 0) + Number(arg), el = byId('f-amt'); if (el) { el.value = fmtN(v, 0); el.focus(); } },
   dateSet(arg) { const el = byId('f-date'); if (el) el.value = addDays(todayStr(), -Number(arg)); },
-  quickFill(arg) {
-    if (!SHEET || !SHEET.vals.recent) return;
-    const r = SHEET.vals.recent[Number(arg)];
-    if (!r) return;
-    const a = byId('f-amt'), m = byId('f-memo');
-    if (a) a.value = fmtN(r.amt, 0);
-    if (m) m.value = r.memo;
-    SHEET.vals.cat = r.cat; SHEET.vals.sub = r.sub || '';
-    document.querySelectorAll('#sheet [data-grp=cat]').forEach(b => { const on = b.getAttribute('data-arg') === 'cat|' + r.cat; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-    const w = byId('subwrap'); if (w) w.innerHTML = subChips(r.cat, r.sub || '');
-  },
+  catUnfold() { if (!SHEET) return; SHEET.vals.fold = false; const w = byId('catwrap'); if (w) w.innerHTML = catArea(SHEET.vals); },
   toggleCat(arg) { NAV.open[arg] = !NAV.open[arg]; render(); },
   toggleAll(arg) { NAV.open['all:' + arg] = !NAV.open['all:' + arg]; render(); },
   range(arg) { NAV.range = arg; NAV.exall = false; render(); },
