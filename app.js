@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 51;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 52;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1926,14 +1926,14 @@ function viewMoney() {
   const budget = budgetTotal(cur), pct = budget > 0 ? D.spent / budget * 100 : 0, left = budget - D.spent;
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
   const rest = D.income - D.spent - D.invSum;
-  let h = backHdr('가계부', 'money', 'money', editLink('money'));
+  let h = backHdr('가계부', 'money', 'money', editLink('money')) + '<!--cols-->';
   h += '<div class="btnpair"><button type="button" class="btn c-money" data-act="logMoney" data-arg="">지출 추가</button><button type="button" class="btn ghost c-money" data-act="logIncome" data-arg="">수입 추가</button></div>';
   h += monthNav(ymLabel(cur), 'mmMonth', !isNow);
   h += '<section class="card c-money" aria-label="이번 달"><div class="bigrow"><div class="a1">' + (isNow ? ymNow() : mlabel) + ' 지출</div><div class="sm nm">' + (!sb ? '' : left >= 0 ? '남은 예산 ' + won(left) : '예산 초과 ' + won(-left)) + '</div></div>' +
     '<div class="big">' + won(D.spent) + (sb ? '<span class="u">/ ' + won(budget) + '</span>' : '') + '</div>' + (sb ? '<div class="track' + (pct >= 100 ? ' hot' : '') + '"><div style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' : '') +
     (!sb ? '<div class="sm cap">' + (P.spent > 0 ? '전달 ' + won(P.spent) + ' · ' : '') + '<button type="button" class="lnk" data-act="tgBudget">예산 보기</button></div>' : '<div class="sm cap">' + (isNow ? (left > 0 ? '남은 ' + daysLeft + '일 동안 하루 ' + won(Math.floor(left / daysLeft)) + '까지 쓸 수 있어요' : '이번 달 예산을 다 썼어요') : '예산의 ' + Math.round(pct) + '%를 썼어요') + (P.spent > 0 ? ' · 전달 ' + won(P.spent) : '') + ' · <button type="button" class="lnk" data-act="budgetEdit" data-arg="' + cur + '">예산 바꾸기</button> · <button type="button" class="lnk" data-act="tgBudget">숨기기</button></div>') +
     '</section>';
-  h += '<!--cols-->' + '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">월별 통계</span><span class="l2r">' + (D.income > 0 ? '수입 ' + won(D.income) + ' · 남는 돈 ' + swon(rest) : '수입·지출·투자 한눈에') + '</span>' + CHEV + '</a>';
+  h += '<a href="#" class="group lstrow c-money" data-act="go" data-arg="mstat"><span class="l1">월별 통계</span><span class="l2r">' + (D.income > 0 ? '수입 ' + won(D.income) + ' · 남는 돈 ' + swon(rest) : '수입·지출·투자 한눈에') + '</span>' + CHEV + '</a>';
   const catRows = st.cats.map(c => ({ c: c, sp: catSpentMonth(c.id, cur) })).sort((a, b) => b.sp - a.sp), allCats = !!NAV.catAll;
   const catShown = allCats ? catRows : catRows.filter(x => x.sp > 0).slice(0, 5), catHidden = catRows.length - catShown.length;
   const catTbl = catShown.map(x => { const c = x.c, cb = budgetCat(c, cur), over = sb && cb > 0 && x.sp > cb, subs = S.settings.subOn && c.subs.length > 0, open = !!NAV.open[c.id] && subs;

@@ -935,3 +935,14 @@ html[data-side] .bkhero{height:300px}
 
 /* v51: 예산 표시 끄기 */
 .xl.nob .xh.cat,.xl.nob .xr.cat{grid-template-columns:minmax(0,1fr) 110px}
+
+/* v52: PC·태블릿에서 이름과 금액이 멀어지지 않게 */
+@media (min-width:700px){
+  .xl{max-width:500px}
+  .xh,.xr{grid-template-columns:48px minmax(0,1fr) 92px 104px}
+  .xh.cat,.xr.cat{grid-template-columns:minmax(0,1fr) 96px 96px 96px}
+  .xl:has(.xh.cat){max-width:460px}
+  .xl.nob .xh.cat,.xl.nob .xr.cat{grid-template-columns:minmax(0,1fr) 110px}
+  .xl.nob:has(.xh.cat){max-width:300px}
+  .xr{min-height:34px;font-size:14px}
+}
