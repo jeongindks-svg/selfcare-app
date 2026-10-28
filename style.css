@@ -932,3 +932,6 @@ html[data-side] .bkhero{height:300px}
 .xr.subr{min-height:26px;font-size:12.5px;color:var(--sub)}
 .xr.tot{font-weight:700;background:var(--track2)!important}
 .xr.tot .n{font-weight:700}
+
+/* v51: 예산 표시 끄기 */
+.xl.nob .xh.cat,.xl.nob .xr.cat{grid-template-columns:minmax(0,1fr) 110px}
