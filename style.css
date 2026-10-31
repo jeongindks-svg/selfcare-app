@@ -951,3 +951,20 @@ html[data-side] .bkhero{height:300px}
 .big .lnkb{border:0;background:transparent;padding:0;font:inherit;font-size:.5em;font-weight:500;color:var(--sub);margin-left:6px}
 .sm.cap b.neg{color:var(--bad)}.sm.cap b.inc{color:var(--good)}
 .xr .n.inc{color:var(--good)}
+
+/* v59: 목표 화면 */
+.ghero{margin-top:4px;border-radius:22px;padding:16px 10px 12px;color:#fff;background:linear-gradient(135deg,#2D5BE3 0%,#5B3FD6 60%,#8A3FB8 100%);box-shadow:0 6px 18px rgba(60,60,160,.22)}
+.grings{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.gring{border:0;background:transparent;color:#fff;display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 0;font:inherit}
+.gring svg{width:62px;height:62px}
+.gring .rb{fill:none;stroke:rgba(255,255,255,.25);stroke-width:6}
+.gring .rf{fill:none;stroke:#fff;stroke-width:6;stroke-linecap:round}
+.gring text{fill:#fff;font-size:13px;font-weight:700;font-family:inherit}
+.gring .gtl{font-size:12.5px;font-weight:600;margin-top:2px}
+.gring .gts{font-size:11.5px;opacity:.8}
+.gsec{margin-top:12px}
+.gsh{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 8px 0 16px}
+.gsh .gt{font-size:15px;font-weight:700}
+.gsh .gc{color:var(--sub);font-size:13px;margin-right:auto}
+.gadd{width:32px;height:32px;border:0;border-radius:50%;background:var(--track2);color:var(--link);display:flex;align-items:center;justify-content:center;padding:0}
+.gsec .emptyrow{padding:6px 16px 14px;font-size:14px;color:var(--sub)}
