@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 63;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 64;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1826,8 +1826,10 @@ function viewBucket() {
 const PG_WD = ['월', '화', '수', '목', '금', '토', '일'];
 const schDayItems = d => S.sched.filter(x => schOn(x, d)).sort((a, b) => schMin(a.t) - schMin(b.t));
 const monOf = d => addDays(d, -((parseD(d).getDay() + 6) % 7));
-function pgItemRow(x) {
-  return '<button type="button" class="pgi" data-act="editSch" data-arg="' + x.id + '">' + (x.t ? '<span class="pgt">' + x.t + (x.e ? '<i>~' + x.e + '</i>' : '') + '</span>' : '') + '<span class="pgn">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="pgr">' + schLabel(x) + '</span>' : '') + '</button>';
+function pgItemRow(x, day) {
+  const dn = !!(x.dn && x.dn[day]);
+  return '<div class="pgi' + (dn ? ' dn' : '') + '"><button type="button" class="pgck" data-act="pgTg" data-arg="' + x.id + '|' + day + '" aria-pressed="' + dn + '" aria-label="' + esc(x.title) + (dn ? ' 완료 취소' : ' 완료') + '">' + (dn ? DONE_SVG : TODO_SVG) + '</button>' +
+    '<button type="button" class="pgb" data-act="editSch" data-arg="' + x.id + '">' + (x.t ? '<span class="pgt">' + x.t + (x.e ? '<i>~' + x.e + '</i>' : '') + '</span>' : '') + '<span class="pgn">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="pgr">' + schLabel(x) + '</span>' : '') + '</button></div>';
 }
 function viewPlanner() {
   const today = schToday(), mode = NAV.pv === 'week' ? 'week' : 'month', sel = NAV.pd || today;
@@ -1838,17 +1840,17 @@ function viewPlanner() {
     let cells = PG_WD.map(w => '<div class="pgh">' + w + '</div>').join('');
     for (let i = 0; i < n; i++) {
       const d = addDays(start, i), inM = d.slice(0, 7) === ym, its = schDayItems(d);
-      cells += '<button type="button" class="pgc' + (inM ? '' : ' out') + (d === today ? ' tdy' : '') + (d === sel ? ' sel' : '') + '" data-act="pgDay" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 ' + its.length + '개"><b>' + (+d.slice(8)) + '</b>' + its.slice(0, 2).map(x => '<span class="pgc1">' + esc(x.title) + '</span>').join('') + (its.length > 2 ? '<span class="pgc2">+' + (its.length - 2) + '</span>' : '') + '</button>';
+      cells += '<button type="button" class="pgc' + (inM ? '' : ' out') + (d === today ? ' tdy' : '') + (d === sel ? ' sel' : '') + '" data-act="pgDay" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 ' + its.length + '개"><b>' + (+d.slice(8)) + '</b>' + its.slice(0, 2).map(x => '<span class="pgc1' + (x.dn && x.dn[d] ? ' dn' : '') + '">' + esc(x.title) + '</span>').join('') + (its.length > 2 ? '<span class="pgc2">+' + (its.length - 2) + '</span>' : '') + '</button>';
     }
     h += '<div class="pgrid">' + cells + '</div>';
     const its = schDayItems(sel);
-    h += '<section class="group"><div class="gsh"><span class="gt">' + md(sel) + ' ' + WD[parseD(sel).getDay()] + '요일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + sel + '" aria-label="일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(pgItemRow).join('') : '<div class="emptyrow">일정이 없어요</div>') + '</section>';
+    h += '<section class="group"><div class="gsh"><span class="gt">' + md(sel) + ' ' + WD[parseD(sel).getDay()] + '요일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + sel + '" aria-label="일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(x => pgItemRow(x, sel)).join('') : '<div class="emptyrow">일정이 없어요</div>') + '</section>';
   } else {
     const wk = NAV.pw || 0, mon = addDays(monOf(today), wk * 7), end = addDays(mon, 6), f = d => (+d.slice(5, 7)) + '.' + (+d.slice(8));
     h += monthNav(f(mon) + ' ~ ' + f(end), 'pgNav', true, wk === 0 ? '' : 'pgToday');
     h += '<div class="pgweek">' + Array.from({ length: 7 }, (_, i) => {
       const d = addDays(mon, i), its = schDayItems(d);
-      return '<section class="group pgd' + (d === today ? ' tdy' : '') + '"><div class="gsh"><span class="gt">' + PG_WD[i] + ' ' + (+d.slice(8)) + '일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(pgItemRow).join('') : '<div class="emptyrow">–</div>') + '</section>';
+      return '<section class="group pgd' + (d === today ? ' tdy' : '') + '"><div class="gsh"><span class="gt">' + PG_WD[i] + ' ' + (+d.slice(8)) + '일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(x => pgItemRow(x, d)).join('') : '<div class="emptyrow">–</div>') + '</section>';
     }).join('') + '</div>';
   }
   return h;
@@ -3252,6 +3254,7 @@ const ACT = {
   pgView(arg) { NAV.pv = arg; render(); },
   pgNav(arg) { const n = Number(arg); if (NAV.pv === 'week') NAV.pw = (NAV.pw || 0) + n; else NAV.pm = monthShift(NAV.pm || schToday().slice(0, 7), n); render(); },
   pgToday() { NAV.pw = 0; NAV.pm = ''; NAV.pd = ''; render(); },
+  pgTg(arg) { const p = arg.split('|'), x = S.sched.find(y => y.id === p[0]); if (!x) return; x.dn = x.dn || {}; if (x.dn[p[1]]) delete x.dn[p[1]]; else x.dn[p[1]] = true; commit(); render(); },
   pgDay(arg) { NAV.pd = arg; render(); },
   pgAdd(arg) { NAV.pd = arg; NAV.sd = arg; sheetSch(); },
   addSd() { sheetSomeday(); }, editSd(arg) { sheetSomeday(arg); }, moveSd(arg) { sheetSdMove(arg); },
