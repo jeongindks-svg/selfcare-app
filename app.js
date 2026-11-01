@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 60;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 61;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -2363,11 +2363,14 @@ function subChips(cid, sel) {
 const lastExpDate = () => { const t = todayStr(), d = S.lastExpDate; return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= t ? d : t; };
 const catHasSub = cid => { const c = S.settings.cats.find(x => x.id === cid); return !!(S.settings.subOn && c && c.subs.length); };
 /* 카테고리를 고르면 그 안의 선택지만 남겨요 (예: 교통 → 대중교통 · 택시 · 킥보드) */
+const CAT_EMO = { '식비': '🍚', '교통': '🚌', '카페': '☕', '쇼핑': '🛍️', '헌금·기부': '🙏', '기타': '✨', '의료': '💊', '문화': '🎬', '여가': '🎮', '주거': '🏠', '통신': '📱', '교육': '📚', '미용': '💇', '경조사': '🎁', '술': '🍺', '간식': '🍪' };
+const CAT_TINT = ['#FFE3E3', '#E3F0FF', '#FFF1D6', '#E4F7E6', '#EBE5FF', '#FFE4F1', '#DDF6F3', '#FFEBDD'];
+function catIcon(c, k) { return '<span class="cti" style="background:' + CAT_TINT[k % CAT_TINT.length] + '">' + (CAT_EMO[c.name] || esc(String(c.name).slice(0, 1))) + '</span>'; }
 function catArea(v) {
-  const c = S.settings.cats.find(x => x.id === v.cat);
-  if (c && v.fold && catHasSub(v.cat)) return '<div class="fld"><label>카테고리</label><div class="chipsel" role="group"><button type="button" class="cs on" data-act="catUnfold" aria-label="카테고리 다시 고르기">' + esc(c.name) + ' ✕</button></div></div>' +
-    '<div class="fld">' + chipsHtml('sub', c.subs.map(x => ({ v: x.id, l: x.name })), v.sub || '') + '</div>';
-  return '<div class="fld"><label>카테고리</label>' + chipsHtml('cat', S.settings.cats.map(x => ({ v: x.id, l: x.name })), v.cat) + '</div>';
+  const cats = S.settings.cats, k = cats.findIndex(x => x.id === v.cat), c = cats[k];
+  if (c && v.fold && catHasSub(v.cat)) return '<div class="fld"><label>카테고리</label><button type="button" class="catsel" data-act="catUnfold" aria-label="카테고리 다시 고르기">' + catIcon(c, k) + '<b>' + esc(c.name) + '</b><span class="chg">변경</span></button></div>' +
+    '<div class="fld subpills"><label>' + esc(c.name) + ' 종류</label>' + chipsHtml('sub', c.subs.map(x => ({ v: x.id, l: x.name })), v.sub || '') + '</div>';
+  return '<div class="fld"><label>카테고리</label><div class="catgrid" role="group">' + cats.map((x, n) => '<button type="button" class="ctl' + (x.id === v.cat ? ' on' : '') + '" data-act="pickVal" data-arg="cat|' + esc(x.id) + '" data-grp="cat" aria-pressed="' + (x.id === v.cat) + '">' + catIcon(x, n) + '<span class="ctn2">' + esc(x.name) + '</span></button>').join('') + '</div></div>';
 }
 function sheetMoney(eid, corp) {
   const t = todayStr(), cats = S.settings.cats, cur = eid ? S.logs.exp.find(x => x.id === eid) : null;
