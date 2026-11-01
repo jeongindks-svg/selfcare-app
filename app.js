@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 64;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 65;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1836,21 +1836,21 @@ function viewPlanner() {
   let h = backHdr('일정', 'cal', 'blue', '') + '<div class="seg rangeseg" role="group" aria-label="보기">' + [['week', '주'], ['month', '월']].map(k => '<button type="button" data-act="pgView" data-arg="' + k[0] + '" aria-pressed="' + (mode === k[0]) + '">' + k[1] + '</button>').join('') + '</div>';
   if (mode === 'month') {
     const ym = NAV.pm || today.slice(0, 7), first = ym + '-01', start = monOf(first), n = Math.ceil((((parseD(first).getDay() + 6) % 7) + new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate()) / 7) * 7;
-    h += monthNav(ymLabel(ym), 'pgNav', true, ym === today.slice(0, 7) ? '' : 'pgToday');
+    h += '<div class="pgmonth"><div class="pgcal">' + monthNav(ymLabel(ym), 'pgNav', true, ym === today.slice(0, 7) ? '' : 'pgToday');
     let cells = PG_WD.map(w => '<div class="pgh">' + w + '</div>').join('');
     for (let i = 0; i < n; i++) {
       const d = addDays(start, i), inM = d.slice(0, 7) === ym, its = schDayItems(d);
       cells += '<button type="button" class="pgc' + (inM ? '' : ' out') + (d === today ? ' tdy' : '') + (d === sel ? ' sel' : '') + '" data-act="pgDay" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 ' + its.length + '개"><b>' + (+d.slice(8)) + '</b>' + its.slice(0, 2).map(x => '<span class="pgc1' + (x.dn && x.dn[d] ? ' dn' : '') + '">' + esc(x.title) + '</span>').join('') + (its.length > 2 ? '<span class="pgc2">+' + (its.length - 2) + '</span>' : '') + '</button>';
     }
-    h += '<div class="pgrid">' + cells + '</div>';
+    h += '<div class="pgrid">' + cells + '</div></div>';
     const its = schDayItems(sel);
-    h += '<section class="group"><div class="gsh"><span class="gt">' + md(sel) + ' ' + WD[parseD(sel).getDay()] + '요일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + sel + '" aria-label="일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(x => pgItemRow(x, sel)).join('') : '<div class="emptyrow">일정이 없어요</div>') + '</section>';
+    h += '<div class="pgside"><section class="group"><div class="gsh"><span class="gt">' + md(sel) + ' ' + WD[parseD(sel).getDay()] + '요일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + sel + '" aria-label="일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + its.map(x => pgItemRow(x, sel)).join('') + '</section></div></div>';
   } else {
     const wk = NAV.pw || 0, mon = addDays(monOf(today), wk * 7), end = addDays(mon, 6), f = d => (+d.slice(5, 7)) + '.' + (+d.slice(8));
     h += monthNav(f(mon) + ' ~ ' + f(end), 'pgNav', true, wk === 0 ? '' : 'pgToday');
     h += '<div class="pgweek">' + Array.from({ length: 7 }, (_, i) => {
       const d = addDays(mon, i), its = schDayItems(d);
-      return '<section class="group pgd' + (d === today ? ' tdy' : '') + '"><div class="gsh"><span class="gt">' + PG_WD[i] + ' ' + (+d.slice(8)) + '일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(x => pgItemRow(x, d)).join('') : '<div class="emptyrow">–</div>') + '</section>';
+      return '<section class="group pgd' + (d === today ? ' tdy' : '') + (its.length ? '' : ' empty') + '"><div class="gsh"><span class="gt">' + PG_WD[i] + ' ' + (+d.slice(8)) + '일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + its.map(x => pgItemRow(x, d)).join('') + '</section>';
     }).join('') + '</div>';
   }
   return h;

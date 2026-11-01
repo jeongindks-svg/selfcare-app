@@ -1025,3 +1025,35 @@ html[data-side] .onecol:has(> .pgweek){max-width:none}
 .pgi.dn .pgt{color:var(--sub)}
 .pgc1.dn{text-decoration:line-through;opacity:.5}
 @media (min-width:900px){.pgweek .pgi{flex-wrap:nowrap}.pgweek .pgb{flex-wrap:wrap;gap:2px}.pgweek .pgn{flex-basis:100%}}
+
+/* v65: 일정 태블릿 비율 · 빈 날짜는 비워 두기 */
+.pgck svg.off circle{stroke:var(--sub2)}
+.pgck svg.on circle{fill:var(--cb,var(--link))}
+.pgd.empty .gsh{min-height:40px}
+.onecol:has(> .pgmonth),.onecol:has(> .pgweek){max-width:none}
+html[data-side] .onecol:has(> .pgmonth),html[data-side] .onecol:has(> .pgweek){max-width:none}
+@media (min-width:700px){
+  .onecol:has(> .pgmonth),.onecol:has(> .pgweek){max-width:880px;margin-inline:auto}
+  .pgweek{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+  .pgweek .pgd:last-child{grid-column:1/-1}
+  .pgweek .pgi{flex-wrap:nowrap;padding:0 12px 0 6px}
+  .pgweek .pgb{flex-wrap:nowrap}
+  .pgweek .pgn{flex-basis:auto}
+  .pgweek .gc{display:inline}
+  .pgweek .gt{white-space:normal}
+}
+@media (min-width:1000px){
+  html[data-side] .onecol:has(> .pgmonth),html[data-side] .onecol:has(> .pgweek){max-width:1080px}
+  .pgmonth{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start}
+  .pgside{position:sticky;top:16px}
+  .pgmonth .pgc{min-height:84px}
+}
+@media (min-width:1100px){
+  html[data-side] .pgweek{grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+  html[data-side] .pgweek .pgd:last-child{grid-column:auto}
+  html[data-side] .pgweek .pgi{flex-wrap:wrap;gap:2px;padding:6px 10px}
+  html[data-side] .pgweek .pgb{flex-wrap:wrap;gap:2px}
+  html[data-side] .pgweek .pgn{flex-basis:100%}
+  html[data-side] .pgweek .gc{display:none}
+  html[data-side] .pgweek .gt{white-space:nowrap}
+}
