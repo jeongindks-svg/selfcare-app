@@ -1015,3 +1015,13 @@ html[data-side] .bkhero{height:300px}
 .onecol:has(.pgweek),.onecol:has(.pgrid){max-width:none}
 @media (min-width:900px){.pgweek .gc{display:none}.pgweek .gt{white-space:nowrap;margin-right:auto}.onecol:has(.pgrid) .pgrid{max-width:900px}}
 html[data-side] .onecol:has(> .pgweek){max-width:none}
+
+/* v64: 일정 체크 */
+.pgi{padding:0 12px 0 6px;gap:4px}
+.pgck{flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:44px;border:0;background:transparent;padding:0}
+.pgck svg{width:24px;height:24px}
+.pgb{flex:1;min-width:0;display:flex;align-items:center;gap:10px;min-height:44px;border:0;background:transparent;color:var(--text);font:inherit;text-align:left;padding:0}
+.pgi.dn .pgn{color:var(--sub);text-decoration:line-through}
+.pgi.dn .pgt{color:var(--sub)}
+.pgc1.dn{text-decoration:line-through;opacity:.5}
+@media (min-width:900px){.pgweek .pgi{flex-wrap:nowrap}.pgweek .pgb{flex-wrap:wrap;gap:2px}.pgweek .pgn{flex-basis:100%}}
