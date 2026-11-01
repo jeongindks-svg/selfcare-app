@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 61;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 62;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -527,7 +527,7 @@ function schOn(x, day) {
 const schLabel = x => x.rep === 'daily' ? '매일' : x.rep === 'wk' ? '평일' : x.rep === 'days' ? (x.days || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(i => WD[i]).join('·') : '';
 /* 하루는 새벽 3시에 끝나요: 00:00~02:59는 전날 일정의 마지막 시간으로 봐요 */
 const SCH_CUT = DAY_CUT_H * 60;
-const schMin = t => { const m = +t.slice(0, 2) * 60 + +t.slice(3, 5); return m < SCH_CUT ? m + 1440 : m; };
+const schMin = t => { if (!t) return -1; const m = +t.slice(0, 2) * 60 + +t.slice(3, 5); return m < SCH_CUT ? m + 1440 : m; };
 const schToday = dayStr;
 function schCard() {
   const today = schToday(), sd = NAV.sd || today, t = sd, now = new Date(), nm = schMin(PAD(now.getHours()) + ':' + PAD(now.getMinutes()));
@@ -545,16 +545,17 @@ function sheetSch(sid) {
   const cur = sid ? S.sched.find(x => x.id === sid) : null;
   if (sid && !cur) return;
   const sd = NAV.sd || schToday(), vals = { rep: cur ? (['daily', 'wk', 'days'].indexOf(cur.rep) >= 0 ? cur.rep : 'once') : 'once', days: cur && cur.rep === 'days' ? (cur.days || []).slice() : [new Date(sd + 'T00:00:00').getDay()] };
-  const body = '<div class="two">' + field('시작 (예: 0900, 새벽은 0130)', 'f-t', 'text', cur ? cur.t : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="09:00"') + field('끝 (선택)', 'f-e', 'text', cur ? cur.e || '' : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="10:00"') + '</div>' +
+  const body = '<div class="two">' + field('시작 (선택, 예: 0900)', 'f-t', 'text', cur ? cur.t : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="09:00"') + field('끝 (선택)', 'f-e', 'text', cur ? cur.e || '' : '', 'inputmode="numeric" maxlength="5" autocomplete="off" data-inp="timeFmt" placeholder="10:00"') + '</div>' +
     field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝"') +
     '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: cur && cur.d && cur.d !== schToday() ? md(cur.d) + '만' : (!cur && sd !== schToday() ? md(sd) + '만' : '오늘만') }, { v: 'days', l: '요일 선택' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
     '<div class="fld" id="dayswrap" style="display:' + (vals.rep === 'days' ? 'block' : 'none') + '"><label>요일</label><div class="chipsel" role="group">' + [1, 2, 3, 4, 5, 6, 0].map(i => '<button type="button" class="cs' + (vals.days.indexOf(i) >= 0 ? ' on' : '') + '" data-act="schDays" data-arg="' + i + '" aria-pressed="' + (vals.days.indexOf(i) >= 0) + '">' + WD[i] + '</button>').join('') + '</div></div>' +
     (cur ? delBtn('sch|' + sid) : '') + ERR;
   openSheet(cur ? '일정 수정' : '일정 추가', body, () => {
-    const t = parseHM(val('f-t')), e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
-    if (!t) return setErr('시작 시간을 24시간 형식으로 적어 주세요. 예: 0900');
+    const rawT = String(val('f-t')).trim(), t = rawT ? parseHM(rawT) : '', e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
+    if (t === null) return setErr('시작 시간을 24시간 형식으로 적어 주세요. 예: 0900');
+    if (e && !t) return setErr('끝 시간을 쓰려면 시작 시간도 적어 주세요.');
     if (e === null) return setErr('끝 시간 형식이 맞지 않아요. 예: 1000');
-    if (e && schMin(e) <= schMin(t)) return setErr('끝 시간은 시작보다 늦어야 해요. (새벽 3시 전은 같은 날 밤으로 봐요)');
+    if (e && t && schMin(e) <= schMin(t)) return setErr('끝 시간은 시작보다 늦어야 해요. (새벽 3시 전은 같은 날 밤으로 봐요)');
     if (!title) return setErr('할 일을 입력해 주세요.');
     const rec = cur || { id: 'sc' + uid(), dn: {} };
     if (SHEET.vals.rep === 'days' && !SHEET.vals.days.length) return setErr('요일을 하나 이상 골라 주세요.');
@@ -1065,7 +1066,7 @@ function paceChart(items) {
 
 /* ================= 화면 ================= */
 let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'base', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0, bf: 'open', bq: '', bsort: 'no' };
-const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
+const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', planner: '일정', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
   if (!top) return '기록';
@@ -1164,7 +1165,9 @@ function viewToday() {
     (dn.length || skd.length ? '<section class="group done" aria-label="완료한 일"><div class="gh">완료</div>' + dn.slice().sort(todoByColor).map(todoRow).join('') + skd.slice().sort(todoByColor).map(todoRow).join('') + '</section>' : '');
   const rems = S.reminders.filter(remActive).sort((a, b) => a.due < b.due ? -1 : 1);
   const remCard = rems.length ? '<section class="group rems" aria-label="알림"><div class="gh row"><span>알림</span><a href="#" class="lnk" data-act="go" data-arg="remind">모두 보기</a></div>' + rems.map(remRow).join('') + '</section>' : '';
-  return hdr('오늘', sub) + top + remCard + '<!--cols-->' + todoCard.split('<section class="group done"')[0] + '<!--col-->' + schCard() + (todoCard.indexOf('<section class="group done"') >= 0 ? '<section class="group done"' + todoCard.split('<section class="group done"')[1] : '');
+  const nPl = S.sched.filter(x => schOn(x, schToday())).length;
+  const plLink = '<a href="#" class="group lstrow c-blue" data-act="go" data-arg="planner"><span class="l1">일정</span><span class="l2r">' + (nPl ? '오늘 ' + nPl + '개 · 달력으로 보기' : '주·월 달력으로 보기') + '</span>' + CHEV + '</a>';
+  return hdr('오늘', sub) + top + remCard + plLink + '<!--cols-->' + todoCard.split('<section class="group done"')[0] + '<!--col-->' + (todoCard.indexOf('<section class="group done"') >= 0 ? '<section class="group done"' + todoCard.split('<section class="group done"')[1] : '');
 }
 
 /* ---------- 분야 (목록) ---------- */
@@ -1819,6 +1822,37 @@ function viewBucket() {
     '<div class="bkbody"><div class="searchbar"><input type="search" id="bq" class="tin" value="' + esc(NAV.bq || '') + '" placeholder="버킷리스트 검색" autocomplete="off" enterkeyhint="search" aria-label="버킷리스트 검색" data-inp="bsearch"></div>' +
     '<button type="button" class="btn full bkadd" data-act="addBucket" data-arg="">버킷리스트 추가</button><div id="bres" class="stackc">' + bucketBody() + '</div></div></div>';
 }
+/* ---------- 일정: 주·월 달력 형식으로 날짜별 할 일을 적고 봐요 ---------- */
+const PG_WD = ['월', '화', '수', '목', '금', '토', '일'];
+const schDayItems = d => S.sched.filter(x => schOn(x, d)).sort((a, b) => schMin(a.t) - schMin(b.t));
+const monOf = d => addDays(d, -((parseD(d).getDay() + 6) % 7));
+function pgItemRow(x) {
+  return '<button type="button" class="pgi" data-act="editSch" data-arg="' + x.id + '"><span class="pgt">' + (x.t ? x.t + (x.e ? '<i>~' + x.e + '</i>' : '') : '종일') + '</span><span class="pgn">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="pgr">' + schLabel(x) + '</span>' : '') + '</button>';
+}
+function viewPlanner() {
+  const today = schToday(), mode = NAV.pv === 'week' ? 'week' : 'month', sel = NAV.pd || today;
+  let h = backHdr('일정', 'cal', 'blue', '') + '<div class="seg rangeseg" role="group" aria-label="보기">' + [['week', '주'], ['month', '월']].map(k => '<button type="button" data-act="pgView" data-arg="' + k[0] + '" aria-pressed="' + (mode === k[0]) + '">' + k[1] + '</button>').join('') + '</div>';
+  if (mode === 'month') {
+    const ym = NAV.pm || today.slice(0, 7), first = ym + '-01', start = monOf(first), n = Math.ceil((((parseD(first).getDay() + 6) % 7) + new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate()) / 7) * 7;
+    h += monthNav(ymLabel(ym), 'pgNav', true, ym === today.slice(0, 7) ? '' : 'pgToday');
+    let cells = PG_WD.map(w => '<div class="pgh">' + w + '</div>').join('');
+    for (let i = 0; i < n; i++) {
+      const d = addDays(start, i), inM = d.slice(0, 7) === ym, its = schDayItems(d);
+      cells += '<button type="button" class="pgc' + (inM ? '' : ' out') + (d === today ? ' tdy' : '') + (d === sel ? ' sel' : '') + '" data-act="pgDay" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 ' + its.length + '개"><b>' + (+d.slice(8)) + '</b>' + its.slice(0, 2).map(x => '<span class="pgc1">' + esc(x.title) + '</span>').join('') + (its.length > 2 ? '<span class="pgc2">+' + (its.length - 2) + '</span>' : '') + '</button>';
+    }
+    h += '<div class="pgrid">' + cells + '</div>';
+    const its = schDayItems(sel);
+    h += '<section class="group"><div class="gsh"><span class="gt">' + md(sel) + ' ' + WD[parseD(sel).getDay()] + '요일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + sel + '" aria-label="일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(pgItemRow).join('') : '<div class="emptyrow">일정이 없어요</div>') + '</section>';
+  } else {
+    const wk = NAV.pw || 0, mon = addDays(monOf(today), wk * 7), end = addDays(mon, 6), f = d => (+d.slice(5, 7)) + '.' + (+d.slice(8));
+    h += monthNav(f(mon) + ' ~ ' + f(end), 'pgNav', true, wk === 0 ? '' : 'pgToday');
+    h += '<div class="pgweek">' + Array.from({ length: 7 }, (_, i) => {
+      const d = addDays(mon, i), its = schDayItems(d);
+      return '<section class="group pgd' + (d === today ? ' tdy' : '') + '"><div class="gsh"><span class="gt">' + PG_WD[i] + ' ' + (+d.slice(8)) + '일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + (its.length ? its.map(pgItemRow).join('') : '<div class="emptyrow">–</div>') + '</section>';
+    }).join('') + '</div>';
+  }
+  return h;
+}
 /* ---------- Someday List: 언젠가는 해야 할 일. 나중에 체크하거나 오늘·주·월 목표로 옮겨요 ---------- */
 function sdRow(x) {
   const d = !!x.done;
@@ -2196,9 +2230,9 @@ function viewSettings() {
 
 const VIEWS = {
   today: () => viewToday(), cats: () => viewCats(), growth: () => viewGrowth(), growthd: () => viewGrowthD(), review: () => viewReview(), cal: () => viewCal(), goals: () => viewGoals(), remind: () => viewRemind(), yearly: () => viewGoals(), mstat: () => viewMStat(), exlist: () => viewExList(),
-  ex: () => viewEx(NAV.arg), sleep: () => viewSleep(), money: () => viewMoney(), faith: () => viewFaith(), bucket: () => viewBucket(), wish: () => viewWish(), someday: () => viewSomeday(), settings: () => viewSettings()
+  ex: () => viewEx(NAV.arg), sleep: () => viewSleep(), money: () => viewMoney(), faith: () => viewFaith(), bucket: () => viewBucket(), wish: () => viewWish(), planner: () => viewPlanner(), someday: () => viewSomeday(), settings: () => viewSettings()
 };
-const TAB_OF = { today: 'today', cats: 'cats', growth: 'growth', growthd: 'growth', review: 'review', cal: 'cal', goals: 'cats', remind: 'cats', yearly: 'cats', mstat: 'cats', exlist: 'cats', ex: 'cats', sleep: 'cats', money: 'cats', faith: 'cats', bucket: 'cats', wish: 'cats', someday: 'cats', settings: 'cats' };
+const TAB_OF = { today: 'today', cats: 'cats', growth: 'growth', growthd: 'growth', review: 'review', cal: 'cal', goals: 'cats', remind: 'cats', yearly: 'cats', mstat: 'cats', exlist: 'cats', ex: 'cats', sleep: 'cats', money: 'cats', faith: 'cats', bucket: 'cats', wish: 'cats', planner: 'today', someday: 'cats', settings: 'cats' };
 
 /* ================= 시트(입력·수정 창) ================= */
 let SHEET = null;
@@ -3215,6 +3249,11 @@ const ACT = {
   bucketFilter(arg) { NAV.bf = arg; render(); },
   bucketNum(arg) { const p = arg.split('|'); numSheet('번호 바꾸기', '고유번호 (이미 쓰는 번호면 서로 바꿔요)', p[1], v => bucketSetNo(p[0], Math.max(1, Math.round(v)))); },
   addBucket() { sheetBucket(); }, editBucket(arg) { sheetBucket(arg); },
+  pgView(arg) { NAV.pv = arg; render(); },
+  pgNav(arg) { const n = Number(arg); if (NAV.pv === 'week') NAV.pw = (NAV.pw || 0) + n; else NAV.pm = monthShift(NAV.pm || schToday().slice(0, 7), n); render(); },
+  pgToday() { NAV.pw = 0; NAV.pm = ''; NAV.pd = ''; render(); },
+  pgDay(arg) { NAV.pd = arg; render(); },
+  pgAdd(arg) { NAV.pd = arg; NAV.sd = arg; sheetSch(); },
   addSd() { sheetSomeday(); }, editSd(arg) { sheetSomeday(arg); }, moveSd(arg) { sheetSdMove(arg); },
   sdTg(arg) { const x = S.someday.find(y => y.id === arg); if (!x) return; if (x.done) { x.done = false; x.doneAt = null; commit(); render(); } else sheetSdDate(x); },
   sdPull(arg) { const x = S.someday.find(y => y.id === arg); if (!x) return; const cp = curPlan(); S.plans.push({ id: 'p' + uid(), period: cp.per, pk: planKey(cp.per, cp.off), title: x.title, target: 0, unit: '', cur: 0, done: false, doneAt: null }); S.someday = S.someday.filter(y => y.id !== x.id); commit(); toast('목표로 가져왔어요'); render(); },
