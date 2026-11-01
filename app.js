@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 62;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 63;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1827,7 +1827,7 @@ const PG_WD = ['월', '화', '수', '목', '금', '토', '일'];
 const schDayItems = d => S.sched.filter(x => schOn(x, d)).sort((a, b) => schMin(a.t) - schMin(b.t));
 const monOf = d => addDays(d, -((parseD(d).getDay() + 6) % 7));
 function pgItemRow(x) {
-  return '<button type="button" class="pgi" data-act="editSch" data-arg="' + x.id + '"><span class="pgt">' + (x.t ? x.t + (x.e ? '<i>~' + x.e + '</i>' : '') : '종일') + '</span><span class="pgn">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="pgr">' + schLabel(x) + '</span>' : '') + '</button>';
+  return '<button type="button" class="pgi" data-act="editSch" data-arg="' + x.id + '">' + (x.t ? '<span class="pgt">' + x.t + (x.e ? '<i>~' + x.e + '</i>' : '') + '</span>' : '') + '<span class="pgn">' + esc(x.title) + '</span>' + (schLabel(x) ? '<span class="pgr">' + schLabel(x) + '</span>' : '') + '</button>';
 }
 function viewPlanner() {
   const today = schToday(), mode = NAV.pv === 'week' ? 'week' : 'month', sel = NAV.pd || today;
