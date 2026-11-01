@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 59;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 60;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1134,6 +1134,8 @@ const delta = (a, b) => (a == null || b == null) ? '' : (a - b >= 0 ? '+' : '−
 const deltaCls = (a, b) => (a == null || b == null) ? '' : (a - b >= 0 ? 'up' : 'down');
 const ymNow = () => (new Date().getMonth() + 1) + '월';
 const byDateDesc = (a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : 0;
+/* 지출 목록: 날짜가 같으면 나중에 적은 것이 위 */
+const byExpNewest = (a, b) => a.d < b.d ? 1 : a.d > b.d ? -1 : S.logs.exp.findIndex(y => y.id === b.id) - S.logs.exp.findIndex(y => y.id === a.id);
 const md = d => { const x = parseD(d); return (x.getMonth() + 1) + '월 ' + x.getDate() + '일'; };
 
 /* ---------- 오늘 ---------- */
@@ -1332,7 +1334,7 @@ function calDetail(d) {
   if (st.show.sleep && !sl && d <= todayStr()) rows.push('<button type="button" class="addrow" data-act="logSleep" data-arg="' + d + '">' + ico('plus', 18, 2) + '이 날 수면 기록 추가</button>');
   if (sl) rows.push('<button type="button" class="erow" data-act="logSleep" data-arg="' + d + '"><span class="el"><span class="e1">수면</span><span class="e2">' + esc(sl.bed) + ' → ' + esc(sl.wake) + '</span></span><span class="er">' + fmtDur(sl.dur) + (sl.score ? ' · ' + sl.score + '점' : '') + '</span>' + EDIT_IC + '</button>');
   if (st.show.money) {
-    S.logs.exp.filter(x => x.d === d).forEach(x => rows.push(expRow(x)));
+    S.logs.exp.filter(x => x.d === d).reverse().forEach(x => rows.push(expRow(x)));
     S.logs.inc.filter(x => x.d === d).forEach(x => rows.push(entryRow('inc|' + x.id, esc(x.memo || '수입'), '수입', '+' + won(x.amt), 'inc')));
   }
   if (st.show.faith) {
@@ -2029,9 +2031,9 @@ function viewMoney() {
   const inv = '<section class="group c-faith"><div class="gh">' + (+imM.slice(5)) + '월 투자 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + (+imM.slice(5)) + '월 투자</div><div class="gl2">' + won(ID.invSum) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(invAll.map(x => x.amt))) + '</div></div></div>' +
     '<div class="invbars">' + miniBars(im6.map(m => monthData(m).invSum), im6.map(m => (+m.slice(5)) + '월')) + '</div>' +
-    (ID.invs.length ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + ID.invs.slice().sort(byDateDesc).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '투자'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '<div class="emptyrow">이 달 투자 내역이 없어요.</div>') +
+    (ID.invs.length ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + ID.invs.slice().sort(byExpNewest).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '투자'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '<div class="emptyrow">이 달 투자 내역이 없어요.</div>') +
     '<button type="button" class="addrow" data-act="logInv">' + ico('plus', 18, 2) + '투자 추가</button></section>';
-  const corpAll = S.logs.exp.filter(x => x.corp).sort(byDateDesc), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === cur).map(x => x.amt));
+  const corpAll = S.logs.exp.filter(x => x.corp).sort(byExpNewest), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === cur).map(x => x.amt));
   const corp = '<section class="group c-money"><div class="gh">회사카드 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + (+cur.slice(5)) + '월 사용</div><div class="gl2">' + won(corpMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(corpAll.map(x => x.amt))) + '</div></div></div>' +
     (corpAll.length ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + corpAll.slice(0, 15).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '회사카드'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '') +
@@ -2374,7 +2376,7 @@ function sheetMoney(eid, corp) {
   const vals = { fold: !!(cur && cur.cat && cur.sub && catHasSub(cur.cat)), cat: cur && cur.cat ? cur.cat : (cats.length ? cats[0].id : ''), sub: cur && cur.sub ? cur.sub : '', pay: cur ? (cur.inv ? 'inv' : cur.corp ? 'corp' : 'mine') : (corp === 'inv' ? 'inv' : corp ? 'corp' : 'mine') };
   const showNo = !cur && !spendOn(t) && !S.logs.nospend[t];
   const d0 = cur ? cur.d : lastExpDate();
-  if (!cur && !corp) { const lastC = S.logs.exp.filter(x => !x.corp && !x.inv && x.cat).sort(byDateDesc)[0]; if (lastC && cats.some(c => c.id === lastC.cat)) { vals.cat = lastC.cat; vals.sub = ''; } }
+  if (!cur && !corp) { const lastC = S.logs.exp.filter(x => !x.corp && !x.inv && x.cat).sort(byExpNewest)[0]; if (lastC && cats.some(c => c.id === lastC.cat)) { vals.cat = lastC.cat; vals.sub = ''; } }
   const body = mfield('금액 (원)', 'f-amt', cur ? cur.amt : '', 'placeholder="0"') +
     '<div class="chipsel qadd" role="group" aria-label="금액 더하기">' + [1000, 5000, 10000, 50000].map(n => '<button type="button" class="cs" data-act="amtAdd" data-arg="' + n + '">+' + (n >= 10000 ? n / 10000 + '만' : n / 1000 + '천') + '</button>').join('') + '</div>' +
     (cur ? '<div class="fld"><label>종류</label>' + chipsHtml('pay', [{ v: 'mine', l: '내 지출' }, { v: 'corp', l: '회사카드' }, { v: 'inv', l: '투자' }], vals.pay) + '</div>' : '') +
