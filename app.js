@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 65;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 66;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -11,6 +11,8 @@ const DAY_CUT_H = 3;
 const dayStr = () => ymd(new Date(Date.now() - DAY_CUT_H * 3600000));
 const dayDiff = (a, b) => Math.round((parseD(a) - parseD(b)) / 86400000);
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
+const WORK_SEED = [{ id: 'hp', name: '에어컨 용량별 마력', ql: '모델 번호', al: '마력', cards: [['020', '0.8HP'], ['023', '1.0HP'], ['032', '1.2HP'], ['040', '1.5HP'], ['052', '1.8HP'], ['060', '2.2HP'], ['072', '2.5HP'], ['083', '3.0HP'], ['100', '3.5HP'], ['110', '4.0HP'], ['130', '4.5HP'], ['145', '5.2HP']] }];
+const seedWork = () => ({ decks: WORK_SEED.map(d => ({ id: d.id, name: d.name, ql: d.ql, al: d.al, cards: d.cards.map((c, i) => ({ id: d.id + i, q: c[0], a: c[1] })) })), rec: {} });
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
 function fmtN(n, dec) {
@@ -84,7 +86,7 @@ function defaultState() {
       topics: [], fixed: []
     },
     logs: { ex: {}, sleep: {}, exp: [], faith: {}, nospend: {}, inc: [], notes: [], bible: {}, wheel: {} },
-    bucket: [], wish: [], plans: [], todos: [], reminders: [], sched: [], someday: []
+    bucket: [], wish: [], plans: [], todos: [], reminders: [], sched: [], someday: [], work: seedWork()
   };
 }
 function normalize(o) {
@@ -107,6 +109,8 @@ function normalize(o) {
   s.logs = Object.assign({}, d.logs, o.logs || {});
   ['ex', 'sleep', 'faith', 'nospend', 'bible', 'wheel'].forEach(k => { if (!s.logs[k] || typeof s.logs[k] !== 'object' || Array.isArray(s.logs[k])) s.logs[k] = {}; });
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
+  if (!s.work || !Array.isArray(s.work.decks)) s.work = seedWork();
+  if (!s.work.rec || typeof s.work.rec !== 'object') s.work.rec = {};
   if (typeof s.settings.showBudget !== 'boolean') s.settings.showBudget = true;
   if (['budget', 'prev', 'none'].indexOf(s.settings.catView) < 0) s.settings.catView = s.settings.showBudget ? 'budget' : 'none';
   if (typeof s.settings.subOn !== 'boolean') s.settings.subOn = true;
@@ -985,6 +989,7 @@ const ICONS = {
   review: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   flag: '<path d="M5 21V4M5 5h11l-2 4 2 4H5"/>',
+  book: '<path d="M5 4.5h10a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10"/>',
   later: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   bell: '<path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8M8 8a2.5 2.5 0 1 1 0-5c2.5 0 4 3 4 5M16 8a2.5 2.5 0 1 0 0-5c-2.5 0-4 3-4 5"/>'
@@ -1066,7 +1071,7 @@ function paceChart(items) {
 
 /* ================= 화면 ================= */
 let NAV = { route: 'today', arg: null, range: 'week', stack: [], open: {}, roff: 0, cal: { ym: '', sel: '' }, stat: '', bm: '', bmode: 'base', lm: '', im: '', fw: 0, gper: 'week', goff: 0, yoff: 0, bf: 'open', bq: '', bsort: 'no' };
-const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', planner: '일정', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
+const ROUTE_TITLE = { today: '오늘', cats: '기록', growth: 'Growth', growthd: 'Growth', review: '리뷰', cal: '캘린더', goals: '목표', planner: '일정', work: '업무', deck: '문제집', quiz: '퀴즈', remind: '알림', yearly: '연간 목표', mstat: '통계', exlist: '운동', sleep: '수면', money: '가계부', faith: '신앙', bucket: '버킷리스트', wish: '위시리스트', settings: '설정' };
 function backLabel() {
   const top = NAV.stack[NAV.stack.length - 1];
   if (!top) return '기록';
@@ -1191,6 +1196,7 @@ function viewCats() {
   { const so = S.someday.filter(x => !x.done).length; list.push(deskIcon('goals', 'flag', 'blue', '목표', '주 ' + a.done + '/' + a.n + ' · 월 ' + b2.done + '/' + b2.n + ' · 연 ' + y.done + '/' + y.n + (so ? ' · 대기 ' + so : ''))); }
   list.push(deskIcon('remind', 'bell', 'red', '알림', nr ? '예정 ' + nr + '개' : '없음'));
   if (st.show.bucket) { const bk = bucketStats(); list.push(deskIcon('bucket', 'flag', 'bucket', '버킷리스트', bk.total ? '이룬 ' + bk.done + ' / ' + bk.total : '비어 있음')); }
+  { const n = S.work.decks.reduce((t, d) => t + d.cards.length, 0); list.push(deskIcon('work', 'book', 'sleep', '업무', S.work.decks.length + '개 문제집 · ' + n + '문제')); }
   if (st.show.wish) { const w = wishStats(); list.push(deskIcon('wish', 'gift', 'wish', '위시리스트', w.total ? (w.open ? w.open + '개' : '모두 구입') : '비어 있음')); }
   const now = new Date();
   return '<header class="hdr hrow2"><h1>기록</h1><a href="#" class="lnk big" data-act="go" data-arg="settings">설정</a></header>' +
@@ -1855,6 +1861,90 @@ function viewPlanner() {
   }
   return h;
 }
+/* ---------- 업무 폴더: 문제집으로 객관식·주관식·카드 공부 ---------- */
+const shuf = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
+const normAns = v => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, '').replace(/마력|hp/g, '');
+const sameAns = (a, b) => { const x = normAns(a), y = normAns(b); if (!x) return false; if (x === y) return true; return /^[\d.]+$/.test(x) && /^[\d.]+$/.test(y) && Number(x) === Number(y); };
+const wkRec = id => S.work.rec[id] || { ok: 0, ng: 0, last: '' };
+const wkRate = d => { const r = d.cards.map(c => wkRec(c.id)), ok = sum(r.map(x => x.ok)), t = ok + sum(r.map(x => x.ng)); return t ? Math.round(100 * ok / t) : null; };
+function viewWork() {
+  let h = backHdr('업무', 'book', 'sleep', '') + '<!--cols-->';
+  h += bigBtn('addWkDeck', '', 'sleep', '새 문제집') + '<!--col-->';
+  h += '<section class="group">' + (S.work.decks.length ? S.work.decks.map(d => { const r = wkRate(d); return '<a href="#" class="lrow" data-act="go" data-arg="deck|' + d.id + '"><span class="lt"><span class="l1">' + esc(d.name) + '</span><span class="l2">' + d.cards.length + '문제' + (r == null ? '' : ' · 정답률 ' + r + '%') + '</span></span>' + CHEV + '</a>'; }).join('') : '<div class="emptyrow">문제집이 없어요</div>') + '</section>';
+  return h;
+}
+function viewDeck() {
+  const d = S.work.decks.find(x => x.id === NAV.arg);
+  if (!d) return viewWork();
+  const mode = ['mc', 'short', 'card'].indexOf(NAV.qm) >= 0 ? NAV.qm : 'mc', dir = NAV.qd === 'aq' ? 'aq' : 'qa', wrong = d.cards.filter(c => wkRec(c.id).last === 'ng').length, r = wkRate(d);
+  let h = backHdr(esc(d.name), 'book', 'sleep', '<a href="#" class="lnk" data-act="editWkDeck" data-arg="' + d.id + '">편집</a>') + '<!--cols-->';
+  h += '<section class="card c-sleep"><div class="ml">' + d.cards.length + '문제</div><div class="bigrow"><div class="big">' + (r == null ? dash : r + '<span class="u">%</span>') + '</div><div class="sm nm">' + (wrong ? '틀린 문제 ' + wrong + '개' : r == null ? '아직 풀지 않았어요' : '') + '</div></div></section>';
+  h += '<div class="seg rangeseg" role="group" aria-label="방식">' + [['mc', '객관식'], ['short', '주관식'], ['card', '카드']].map(k => '<button type="button" data-act="quizOpt" data-arg="m|' + k[0] + '" aria-pressed="' + (mode === k[0]) + '">' + k[1] + '</button>').join('') + '</div>';
+  h += '<div class="chipsel" role="group" aria-label="출제 방향"><button type="button" class="cs' + (dir === 'qa' ? ' on' : '') + '" data-act="quizOpt" data-arg="d|qa">' + esc(d.ql) + ' → ' + esc(d.al) + '</button><button type="button" class="cs' + (dir === 'aq' ? ' on' : '') + '" data-act="quizOpt" data-arg="d|aq">' + esc(d.al) + ' → ' + esc(d.ql) + '</button>' + (wrong ? '<button type="button" class="cs' + (NAV.qw ? ' on' : '') + '" data-act="quizOpt" data-arg="w|1">틀린 것만</button>' : '') + '</div>';
+  h += bigBtn('quizStart', d.id, 'sleep', '시작하기') + '<!--col-->';
+  h += '<section class="group"><div class="gsh"><span class="gt">문제 목록</span><span class="gc">' + d.cards.length + '개</span><button type="button" class="gadd" data-act="addWkCard" data-arg="' + d.id + '" aria-label="문제 추가">' + ico('plus', 16, 2.2) + '</button></div>' +
+    (d.cards.length ? '<div class="wkl">' + d.cards.map(c => { const x = wkRec(c.id); return '<button type="button" class="wkr" data-act="editWkCard" data-arg="' + d.id + '|' + c.id + '"><span class="wq">' + esc(c.q) + '</span><span class="wa">' + esc(c.a) + '</span><span class="wm' + (x.last === 'ng' ? ' ng' : x.last === 'ok' ? ' ok' : '') + '">' + (x.last === 'ng' ? '✕' : x.last === 'ok' ? '✓' : '') + '</span></button>'; }).join('') + '</div>' : '<div class="emptyrow">문제를 추가해 보세요</div>') + '</section>';
+  return h;
+}
+function quizQ(Q, dk) {
+  const c = dk.cards.find(x => x.id === Q.ids[Q.i]), ans = Q.dir === 'qa' ? c.a : c.q;
+  Q.st = 'ask'; Q.pick = null; Q.ok1 = null;
+  if (Q.mode === 'mc') { const pool = Array.from(new Set(dk.cards.map(x => Q.dir === 'qa' ? x.a : x.q).filter(v => v !== ans))); Q.opts = shuf(shuf(pool).slice(0, 3).concat([ans])); }
+}
+function quizRec(id, ok) { const r = S.work.rec[id] = S.work.rec[id] || { ok: 0, ng: 0, last: '' }; if (ok) r.ok++; else r.ng++; r.last = ok ? 'ok' : 'ng'; commit(); }
+function viewQuiz() {
+  const Q = NAV.quiz, dk = Q && S.work.decks.find(d => d.id === Q.deck);
+  if (!Q || !dk) return viewWork();
+  let h = backHdr(esc(dk.name), 'book', 'sleep', '');
+  if (Q.st === 'end') {
+    const n = Q.ids.length, pct = n ? Math.round(100 * Q.ok / n) : 0;
+    h += '<section class="card c-sleep"><div class="ml">결과</div><div class="big">' + Q.ok + '<span class="u">/ ' + n + ' · ' + pct + '%</span></div><div class="track"><div style="width:' + pct + '%"></div></div></section>';
+    if (Q.wrong.length) h += '<section class="group"><div class="gh">틀린 문제 <span class="hint">' + Q.wrong.length + '개</span></div><div class="wkl">' + Q.wrong.map(id => { const c = dk.cards.find(x => x.id === id); return c ? '<div class="wkr"><span class="wq">' + esc(c.q) + '</span><span class="wa">' + esc(c.a) + '</span></div>' : ''; }).join('') + '</div></section>';
+    h += (Q.wrong.length ? '<button type="button" class="btn full c-sleep" data-act="quizRetry">틀린 것 다시 풀기</button>' : '') + '<button type="button" class="btn full ghost" data-act="quizStart" data-arg="' + dk.id + '">처음부터 다시</button>';
+    return h;
+  }
+  const c = dk.cards.find(x => x.id === Q.ids[Q.i]), qa = Q.dir === 'qa', big = qa ? c.q : c.a, ans = qa ? c.a : c.q, ask = (qa ? dk.al : dk.ql), given = qa ? dk.ql : dk.al;
+  h += '<div class="qprog"><div class="track"><div style="width:' + (100 * Q.i / Q.ids.length).toFixed(0) + '%"></div></div><span>' + (Q.i + 1) + ' / ' + Q.ids.length + '</span></div>';
+  h += '<section class="card qcard c-sleep"><div class="ql">' + esc(given) + '</div><div class="qbig">' + esc(big) + '</div><div class="ql">' + esc(ask) + '은(는)?</div></section>';
+  const done = Q.st === 'done';
+  if (Q.mode === 'mc') h += '<div class="qopts">' + Q.opts.map((o, k) => '<button type="button" class="qopt' + (done ? (o === ans ? ' right' : Q.pick === k ? ' wrong' : '') : '') + '" data-act="quizPick" data-arg="' + k + '"' + (done ? ' disabled' : '') + '>' + esc(o) + '</button>').join('') + '</div>';
+  else if (Q.mode === 'short') h += '<div class="fld"><input id="qa-in" class="tin qin" type="text" autocomplete="off" autocapitalize="off" inputmode="text" enterkeyhint="done" placeholder="답을 입력"' + (done ? ' disabled value="' + esc(Q.text || '') + '"' : '') + '></div>' + (done ? '' : '<button type="button" class="btn full c-sleep" data-act="quizSubmit">확인</button>');
+  else if (!done) h += '<button type="button" class="btn full ghost" data-act="quizFlip">정답 보기</button>';
+  if (done) {
+    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요' : '정답: <b>' + esc(ans) + '</b>') + '</div>';
+    h += Q.mode === 'card' ? '<div class="btnpair"><button type="button" class="btn ghost" data-act="quizGrade" data-arg="0">몰랐어요</button><button type="button" class="btn c-sleep" data-act="quizGrade" data-arg="1">알았어요</button></div>' : '<button type="button" class="btn full c-sleep" data-act="quizNext">' + (Q.i + 1 >= Q.ids.length ? '결과 보기' : '다음') + '</button>';
+  }
+  return h;
+}
+function sheetWkDeck(did) {
+  const cur = did ? S.work.decks.find(x => x.id === did) : null;
+  if (did && !cur) return;
+  const body = field('문제집 이름', 'f-name', 'text', cur ? cur.name : '', 'maxlength="30" placeholder="예: 에어컨 용량별 마력"') +
+    '<div class="two">' + field('문제 이름표', 'f-ql', 'text', cur ? cur.ql : '모델 번호', 'maxlength="10"') + field('답 이름표', 'f-al', 'text', cur ? cur.al : '마력', 'maxlength="10"') + '</div>' +
+    area('문제 여러 개 한 번에 (한 줄에 하나, 문제 = 답)', 'f-bulk', '', 'rows="5" placeholder="020 = 0.8HP&#10;023 = 1.0HP"') + (cur ? delBtn('wd|' + did) : '') + ERR;
+  openSheet(cur ? '문제집 편집' : '새 문제집', body, () => {
+    const name = val('f-name').trim();
+    if (!name) return setErr('이름을 입력해 주세요.');
+    const rec = cur || { id: 'wd' + uid(), cards: [] };
+    rec.name = name; rec.ql = val('f-ql').trim() || '문제'; rec.al = val('f-al').trim() || '답';
+    String(val('f-bulk')).split(/\n/).forEach(line => { const m = line.split(/=|\t/); if (m.length >= 2 && m[0].trim() && m.slice(1).join('=').trim()) rec.cards.push({ id: 'wc' + uid(), q: m[0].trim(), a: m.slice(1).join('=').trim() }); });
+    if (!cur) S.work.decks.push(rec);
+    done();
+  }, { focus: !cur });
+}
+function sheetWkCard(did, cid) {
+  const d = S.work.decks.find(x => x.id === did), cur = d && cid ? d.cards.find(x => x.id === cid) : null;
+  if (!d || (cid && !cur)) return;
+  const body = field(d.ql, 'f-q', 'text', cur ? cur.q : '', 'maxlength="60"') + field(d.al, 'f-a', 'text', cur ? cur.a : '', 'maxlength="60"') + (cur ? delBtn('wc|' + did + '|' + cid) : '') + ERR;
+  openSheet(cur ? '문제 수정' : '문제 추가', body, () => {
+    const q = val('f-q').trim(), a = val('f-a').trim();
+    if (!q || !a) return setErr('둘 다 입력해 주세요.');
+    const rec = cur || { id: 'wc' + uid() };
+    rec.q = q; rec.a = a;
+    if (!cur) d.cards.push(rec);
+    done();
+  }, { focus: !cur });
+}
 /* ---------- Someday List: 언젠가는 해야 할 일. 나중에 체크하거나 오늘·주·월 목표로 옮겨요 ---------- */
 function sdRow(x) {
   const d = !!x.done;
@@ -2232,9 +2322,9 @@ function viewSettings() {
 
 const VIEWS = {
   today: () => viewToday(), cats: () => viewCats(), growth: () => viewGrowth(), growthd: () => viewGrowthD(), review: () => viewReview(), cal: () => viewCal(), goals: () => viewGoals(), remind: () => viewRemind(), yearly: () => viewGoals(), mstat: () => viewMStat(), exlist: () => viewExList(),
-  ex: () => viewEx(NAV.arg), sleep: () => viewSleep(), money: () => viewMoney(), faith: () => viewFaith(), bucket: () => viewBucket(), wish: () => viewWish(), planner: () => viewPlanner(), someday: () => viewSomeday(), settings: () => viewSettings()
+  ex: () => viewEx(NAV.arg), sleep: () => viewSleep(), money: () => viewMoney(), faith: () => viewFaith(), bucket: () => viewBucket(), wish: () => viewWish(), work: () => viewWork(), deck: () => viewDeck(), quiz: () => viewQuiz(), planner: () => viewPlanner(), someday: () => viewSomeday(), settings: () => viewSettings()
 };
-const TAB_OF = { today: 'today', cats: 'cats', growth: 'growth', growthd: 'growth', review: 'review', cal: 'cal', goals: 'cats', remind: 'cats', yearly: 'cats', mstat: 'cats', exlist: 'cats', ex: 'cats', sleep: 'cats', money: 'cats', faith: 'cats', bucket: 'cats', wish: 'cats', planner: 'today', someday: 'cats', settings: 'cats' };
+const TAB_OF = { today: 'today', cats: 'cats', growth: 'growth', growthd: 'growth', review: 'review', cal: 'cal', goals: 'cats', remind: 'cats', yearly: 'cats', mstat: 'cats', exlist: 'cats', ex: 'cats', sleep: 'cats', money: 'cats', faith: 'cats', bucket: 'cats', wish: 'cats', work: 'cats', deck: 'cats', quiz: 'cats', planner: 'today', someday: 'cats', settings: 'cats' };
 
 /* ================= 시트(입력·수정 창) ================= */
 let SHEET = null;
@@ -2931,6 +3021,9 @@ function mergeStates(a, b) {
   });
   unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans); unionById(out.todos, O.todos); unionById(out.reminders, O.reminders); unionById(out.sched, O.sched); unionById(out.someday, O.someday);
   out.todos.forEach(x => { const o = O.todos.find(y => y.id === x.id); if (o) { x.dn = Object.assign({}, o.dn, x.dn); x.sk = Object.assign({}, o.sk, x.sk); x.cnt = Object.assign({}, o.cnt, x.cnt); x.nt = Object.assign({}, o.nt, x.nt); } });
+  unionById(out.work.decks, O.work.decks);
+  out.work.decks.forEach(d => { const o = O.work.decks.find(x => x.id === d.id); if (o) unionById(d.cards, o.cards); });
+  Object.keys(O.work.rec).forEach(k => { if (!out.work.rec[k]) out.work.rec[k] = O.work.rec[k]; });
   out.theme = a.theme;
   out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
   return out;
@@ -3251,6 +3344,27 @@ const ACT = {
   bucketFilter(arg) { NAV.bf = arg; render(); },
   bucketNum(arg) { const p = arg.split('|'); numSheet('번호 바꾸기', '고유번호 (이미 쓰는 번호면 서로 바꿔요)', p[1], v => bucketSetNo(p[0], Math.max(1, Math.round(v)))); },
   addBucket() { sheetBucket(); }, editBucket(arg) { sheetBucket(arg); },
+  addWkDeck() { sheetWkDeck(); }, editWkDeck(arg) { sheetWkDeck(arg); }, addWkCard(arg) { sheetWkCard(arg); },
+  editWkCard(arg) { const p = arg.split('|'); sheetWkCard(p[0], p[1]); },
+  quizOpt(arg) { const p = arg.split('|'); if (p[0] === 'm') NAV.qm = p[1]; else if (p[0] === 'd') NAV.qd = p[1]; else NAV.qw = !NAV.qw; render(); },
+  quizStart(arg) {
+    const dk = S.work.decks.find(d => d.id === arg);
+    if (!dk) return;
+    let cards = dk.cards.slice();
+    if (NAV.qw) { const w = cards.filter(c => wkRec(c.id).last === 'ng'); if (w.length) cards = w; }
+    const ids = shuf(cards).slice(0, 20).map(c => c.id);
+    if (!ids.length) { toast('문제를 먼저 추가해 주세요'); return; }
+    const Q = NAV.quiz = { deck: dk.id, mode: ['mc', 'short', 'card'].indexOf(NAV.qm) >= 0 ? NAV.qm : 'mc', dir: NAV.qd === 'aq' ? 'aq' : 'qa', ids: ids, i: 0, ok: 0, wrong: [], st: 'ask' };
+    quizQ(Q, dk);
+    if (NAV.route === 'quiz') render(); else ACT.go('quiz');
+  },
+  quizAnswer(ok) { const Q = NAV.quiz, id = Q.ids[Q.i]; Q.st = 'done'; Q.ok1 = ok; if (ok) Q.ok++; else Q.wrong.push(id); quizRec(id, ok); render(); },
+  quizPick(arg) { const Q = NAV.quiz; if (!Q || Q.st !== 'ask') return; const dk = S.work.decks.find(d => d.id === Q.deck), c = dk.cards.find(x => x.id === Q.ids[Q.i]), k = Number(arg); Q.pick = k; ACT.quizAnswer(Q.opts[k] === (Q.dir === 'qa' ? c.a : c.q)); },
+  quizSubmit() { const Q = NAV.quiz; if (!Q || Q.st !== 'ask') return; const el = byId('qa-in'), dk = S.work.decks.find(d => d.id === Q.deck), c = dk.cards.find(x => x.id === Q.ids[Q.i]); Q.text = el ? el.value : ''; ACT.quizAnswer(sameAns(Q.text, Q.dir === 'qa' ? c.a : c.q)); },
+  quizFlip() { const Q = NAV.quiz; if (Q) { Q.st = 'done'; Q.ok1 = null; render(); } },
+  quizGrade(arg) { const Q = NAV.quiz; if (!Q) return; const ok = arg === '1', id = Q.ids[Q.i]; if (ok) Q.ok++; else Q.wrong.push(id); quizRec(id, ok); ACT.quizNext(); },
+  quizNext() { const Q = NAV.quiz, dk = Q && S.work.decks.find(d => d.id === Q.deck); if (!dk) return; Q.i++; if (Q.i >= Q.ids.length) Q.st = 'end'; else quizQ(Q, dk); render(); },
+  quizRetry() { const Q = NAV.quiz, dk = Q && S.work.decks.find(d => d.id === Q.deck); if (!dk) return; NAV.quiz = { deck: Q.deck, mode: Q.mode, dir: Q.dir, ids: shuf(Q.wrong), i: 0, ok: 0, wrong: [], st: 'ask' }; quizQ(NAV.quiz, dk); render(); },
   pgView(arg) { NAV.pv = arg; render(); },
   pgNav(arg) { const n = Number(arg); if (NAV.pv === 'week') NAV.pw = (NAV.pw || 0) + n; else NAV.pm = monthShift(NAV.pm || schToday().slice(0, 7), n); render(); },
   pgToday() { NAV.pw = 0; NAV.pm = ''; NAV.pd = ''; render(); },
@@ -3294,6 +3408,8 @@ const ACT = {
     else if (p[0] === 'rem') S.reminders = S.reminders.filter(x => x.id !== p[1]);
     else if (p[0] === 'sch') S.sched = S.sched.filter(x => x.id !== p[1]);
     else if (p[0] === 'sd') S.someday = S.someday.filter(x => x.id !== p[1]);
+    else if (p[0] === 'wd') { S.work.decks = S.work.decks.filter(x => x.id !== p[1]); if (NAV.route === 'deck') { NAV.route = 'work'; } }
+    else if (p[0] === 'wc') { const d = S.work.decks.find(x => x.id === p[1]); if (d) d.cards = d.cards.filter(x => x.id !== p[2]); }
     else if (p[0] === 'todo') S.todos = S.todos.filter(x => x.id !== p[1]);
     else if (p[0] === 'plan') S.plans = S.plans.filter(x => x.id !== p[1]);
     else if (p[0] === 'fixed') S.settings.fixed = S.settings.fixed.filter(x => x.id !== p[1]);
@@ -3562,4 +3678,4 @@ function init() {
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector && document.querySelector('link[rel="manifest"]')) navigator.serviceWorker.register('./sw.js').catch(() => { /* 오프라인 캐시 없이 사용 */ });
 }
 if (typeof document !== 'undefined' && document.getElementById('view')) init();
-
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'qa-in') { e.preventDefault(); ACT.quizSubmit(); } });
