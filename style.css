@@ -1057,3 +1057,26 @@ html[data-side] .onecol:has(> .pgmonth),html[data-side] .onecol:has(> .pgweek){m
   html[data-side] .pgweek .gc{display:none}
   html[data-side] .pgweek .gt{white-space:nowrap}
 }
+
+/* v66: 업무 · 문제집 */
+.wkl{border-top:1px solid var(--line)}
+.wkr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 22px;align-items:center;gap:8px;width:100%;min-height:42px;padding:0 14px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--text);font:inherit;font-size:15px;text-align:left}
+.wkl .wkr:first-child{border-top:0}
+.wkr .wq{font-weight:700;font-variant-numeric:tabular-nums}
+.wkr .wa{color:var(--text2)}
+.wkr .wm{text-align:right;font-weight:700}.wkr .wm.ok{color:var(--good)}.wkr .wm.ng{color:var(--bad)}
+.qprog{display:flex;align-items:center;gap:10px;margin:2px 0 8px;font-size:13px;color:var(--sub)}.qprog .track{flex:1}
+.qcard{text-align:center;padding:22px 16px}
+.qcard .ql{font-size:14px;color:var(--sub)}
+.qcard .qbig{font-size:44px;font-weight:800;margin:8px 0;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.qopts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.qopt{min-height:64px;border:0;border-radius:16px;background:var(--card);color:var(--text);font:inherit;font-size:22px;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--line)}
+.qopt:active{transform:scale(.98)}
+.qopt.right{background:rgba(52,199,89,.16);box-shadow:inset 0 0 0 2px var(--good);color:var(--text)}
+.qopt.wrong{background:rgba(255,59,48,.13);box-shadow:inset 0 0 0 2px var(--bad)}
+.qopt:disabled{opacity:1}
+.qin{font-size:24px;text-align:center;min-height:60px}
+.qres{text-align:center;font-size:17px;font-weight:600;margin:12px 0}
+.qres.ok{color:var(--good)}.qres.ng{color:var(--bad)}
+.qres b{font-size:22px}
+@media (min-width:700px){.qopts{grid-template-columns:repeat(2,minmax(0,1fr))}.qcard .qbig{font-size:56px}}
