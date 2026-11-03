@@ -1080,3 +1080,9 @@ html[data-side] .onecol:has(> .pgmonth),html[data-side] .onecol:has(> .pgweek){m
 .qres.ok{color:var(--good)}.qres.ng{color:var(--bad)}
 .qres b{font-size:22px}
 @media (min-width:700px){.qopts{grid-template-columns:repeat(2,minmax(0,1fr))}.qcard .qbig{font-size:56px}}
+
+/* v67: 일정 실패 */
+.pgck svg.fail circle{fill:var(--bad)}
+.pgi.fail .pgn{color:var(--bad);text-decoration:line-through}
+.pgi.fail .pgt{color:var(--bad)}
+.pgc1.fl{background:rgba(255,59,48,.16);color:var(--bad);text-decoration:line-through}
