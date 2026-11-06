@@ -1086,3 +1086,6 @@ html[data-side] .onecol:has(> .pgmonth),html[data-side] .onecol:has(> .pgweek){m
 .pgi.fail .pgn{color:var(--bad);text-decoration:line-through}
 .pgi.fail .pgt{color:var(--bad)}
 .pgc1.fl{background:rgba(255,59,48,.16);color:var(--bad);text-decoration:line-through}
+.qcard .qbig.qlong{font-size:23px;line-height:1.4;letter-spacing:0}
+.qopt.long{font-size:15.5px;line-height:1.35;padding:8px 10px}
+@media (min-width:700px){.qcard .qbig.qlong{font-size:30px}.qopt.long{font-size:18px}}

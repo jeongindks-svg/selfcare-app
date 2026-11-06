@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 68;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 69;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -12,10 +12,10 @@ const dayStr = () => ymd(new Date(Date.now() - DAY_CUT_H * 3600000));
 const dayDiff = (a, b) => Math.round((parseD(a) - parseD(b)) / 86400000);
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const WORK_SEED = [{ id: 'hp', v: 1, name: '에어컨 용량별 마력', ql: '모델 번호', al: '마력', cards: [['020', '0.8HP'], ['023', '1.0HP'], ['032', '1.2HP'], ['040', '1.5HP'], ['052', '1.8HP'], ['060', '2.2HP'], ['072', '2.5HP'], ['083', '3.0HP'], ['100', '3.5HP'], ['110', '4.0HP'], ['130', '4.5HP'], ['145', '5.2HP']] },
-  { id: 'pipe1', v: 2, name: '냉매배관 외경 · 인치', ql: '외경(Φ, mm)', al: '인치', cards: [['Φ9.52', '3/8"'], ['Φ12.7', '1/2"'], ['Φ15.88', '5/8"'], ['Φ19.05', '3/4"'], ['Φ22.22', '7/8"'], ['Φ25.4', '1"'], ['Φ28.58', '1-1/8"'], ['Φ31.75', '1-1/4"'], ['Φ38.1', '1-1/2"']] },
-  { id: 'pipe2', v: 2, noRev: true, name: '냉매배관 외경별 용도', ql: '외경(Φ, mm)', al: '용도', cards: [['Φ9.52', '액관 (소형)'], ['Φ12.7', '액관 (중형)'], ['Φ15.88', '가스관 (소형)'], ['Φ19.05', '가스관 (중형)'], ['Φ22.22', '가스관 (대형)'], ['Φ25.4', '가스관 (대용량)'], ['Φ28.58', '가스관 (대용량)'], ['Φ31.75', '가스관 (초대형)'], ['Φ38.1', '가스관 (초대형)']] }];
+  { id: 'pipe1', v: 2, upd: 'merge', name: '냉매배관 외경 · 인치', ql: '외경(Φ, mm)', al: '인치', cards: [['Φ6.35', '1/4"'], ['Φ9.52', '3/8"'], ['Φ12.7', '1/2"'], ['Φ15.88', '5/8"'], ['Φ19.05', '3/4"'], ['Φ22.22', '7/8"'], ['Φ25.4', '1"'], ['Φ28.58', '1-1/8"'], ['Φ31.75', '1-1/4"'], ['Φ38.1', '1-1/2"']] },
+  { id: 'pipe2', v: 2, upd: 'replace', noRev: true, name: '냉매배관 상식', ql: '질문', al: '답', cards: [['한 쌍의 배관에서 더 가는 관은?', '액관'], ['한 쌍의 배관에서 더 굵은 관은?', '가스관'], ['벽걸이 에어컨의 배관 (액관 / 가스관)', '6.35 / 9.52'], ['스탠드 에어컨의 배관 (액관 / 가스관)', '6.35 / 15.88'], ['가정용에서 가장 많이 쓰는 액관 사이즈는?', '6.35 (1/4")'], ['용량이 커질수록 배관은?', '액관과 가스관이 함께 굵어진다'], ['실제 배관 규격은 어디서 확인?', '실외기 명판 · 설치설명서'], ['R410A · R32 배관 두께는?', '규정 두께 이상 (압력이 높아서)'], ['같은 외경인데 다른 것은?', '두께 (0.7 / 0.8 / 1.0T)'], ['냉방 운전 시 고압 배관은?', '액관'], ['냉방 운전 시 저압 배관은?', '가스관'], ['난방 운전 시 고압 배관은?', '가스관'], ['팽창밸브가 실외기에 있는 인버터 기종, 냉방 때 정확히 확인하려면?', '게이지로 확인']] }];
 const seedDeck = d => ({ id: d.id, name: d.name, ql: d.ql, al: d.al, noRev: !!d.noRev, cards: d.cards.map((c, i) => ({ id: d.id + i, q: c[0], a: c[1] })) });
-const WORK_V = 2;
+const WORK_V = 3;
 const seedWork = () => ({ decks: WORK_SEED.map(seedDeck), rec: {}, seedV: WORK_V });
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -115,7 +115,16 @@ function normalize(o) {
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
   if (!s.work || !Array.isArray(s.work.decks)) s.work = seedWork();
   if (!s.work.rec || typeof s.work.rec !== 'object') s.work.rec = {};
-  if ((s.work.seedV || 1) < WORK_V) { WORK_SEED.forEach(d => { if (d.v > (s.work.seedV || 1) && !s.work.decks.some(x => x.id === d.id)) s.work.decks.push(seedDeck(d)); }); s.work.seedV = WORK_V; }
+  if ((s.work.seedV || 1) < WORK_V) {   // 기본 문제집 추가·갱신 (한 번만)
+    const sv = s.work.seedV || 1;
+    WORK_SEED.forEach(d => {
+      const ex = s.work.decks.find(x => x.id === d.id);
+      if (!ex) { if (d.v > sv) s.work.decks.push(seedDeck(d)); }
+      else if (sv < 3 && d.upd === 'replace') { const nd = seedDeck(d); ex.name = nd.name; ex.ql = nd.ql; ex.al = nd.al; ex.noRev = nd.noRev; ex.cards = nd.cards; }
+      else if (sv < 3 && d.upd === 'merge') { const nd = seedDeck(d); nd.cards.slice().reverse().forEach(c => { if (!ex.cards.some(y => y.q === c.q)) ex.cards.unshift(c); }); }
+    });
+    s.work.seedV = WORK_V;
+  }
   if (typeof s.settings.showBudget !== 'boolean') s.settings.showBudget = true;
   if (['budget', 'prev', 'none'].indexOf(s.settings.catView) < 0) s.settings.catView = s.settings.showBudget ? 'budget' : 'none';
   if (typeof s.settings.subOn !== 'boolean') s.settings.subOn = true;
@@ -1910,9 +1919,9 @@ function viewQuiz() {
   }
   const c = dk.cards.find(x => x.id === Q.ids[Q.i]), qa = Q.dir === 'qa', big = qa ? c.q : c.a, ans = qa ? c.a : c.q, ask = (qa ? dk.al : dk.ql), given = qa ? dk.ql : dk.al;
   h += '<div class="qprog"><div class="track"><div style="width:' + (100 * Q.i / Q.ids.length).toFixed(0) + '%"></div></div><span>' + (Q.i + 1) + ' / ' + Q.ids.length + '</span></div>';
-  h += '<section class="card qcard c-sleep"><div class="ql">' + esc(given) + '</div><div class="qbig">' + esc(big) + '</div><div class="ql">' + esc(ask) + '은(는)?</div></section>';
+  h += '<section class="card qcard c-sleep"><div class="ql">' + esc(given) + '</div><div class="qbig' + (String(big).length > 10 ? ' qlong' : '') + '">' + esc(big) + '</div><div class="ql">' + esc(ask) + '은(는)?</div></section>';
   const done = Q.st === 'done';
-  if (Q.mode === 'mc') h += '<div class="qopts">' + Q.opts.map((o, k) => '<button type="button" class="qopt' + (done ? (o === ans ? ' right' : Q.pick === k ? ' wrong' : '') : '') + '" data-act="quizPick" data-arg="' + k + '"' + (done ? ' disabled' : '') + '>' + esc(o) + '</button>').join('') + '</div>';
+  if (Q.mode === 'mc') h += '<div class="qopts">' + Q.opts.map((o, k) => '<button type="button" class="qopt' + (String(o).length > 8 ? ' long' : '') + (done ? (o === ans ? ' right' : Q.pick === k ? ' wrong' : '') : '') + '" data-act="quizPick" data-arg="' + k + '"' + (done ? ' disabled' : '') + '>' + esc(o) + '</button>').join('') + '</div>';
   else if (Q.mode === 'short') h += '<div class="fld"><input id="qa-in" class="tin qin" type="text" autocomplete="off" autocapitalize="off" inputmode="text" enterkeyhint="done" placeholder="답을 입력"' + (done ? ' disabled value="' + esc(Q.text || '') + '"' : '') + '></div>' + (done ? '' : '<button type="button" class="btn full c-sleep" data-act="quizSubmit">확인</button>');
   else if (!done) h += '<button type="button" class="btn full ghost" data-act="quizFlip">정답 보기</button>';
   if (done) {
