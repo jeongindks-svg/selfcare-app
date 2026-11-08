@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 69;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 70;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -487,7 +487,7 @@ function todoLinkDone(l, day) {
   return false;
 }
 function todoLinkName(l) {
-  if (!l) return '';
+  if (!l || l.k === 'money') return '';   // 가계부는 기록과 묶지 않고 체크만 해요
   if (l.k === 'ex') { const e = S.settings.exercises.find(x => x.id === l.id); return e ? e.name + ' 기록' : ''; }
   if (l.k === 'wheel') { const w = S.settings.wheel.find(x => x.id === l.id); return w ? '수레바퀴의 삶 · ' + w.name : ''; }
   return { sleep: '수면 기록', money: '가계부 입력', faith: '기도·말씀 기록' }[l.k] || '';
@@ -526,7 +526,7 @@ const todoDue = (x, d) => !x.every || (dayDiff(d, x.d || d) >= 0 && dayDiff(d, x
 function todoVisible(x) { const t = dayStr(); return x.daily ? todoDue(x, t) : (x.done ? x.doneAt === t : (x.d || t) <= t); }
 function syncTodos() {
   const t = dayStr(); let ch = false;
-  S.todos.forEach(x => { if (!x.daily && !x.done && x.link && todoLinkDone(x.link)) { x.done = true; x.doneAt = t; ch = true; } });
+  S.todos.forEach(x => { if (!x.daily && !x.done && x.link && todoLinkName(x.link) && todoLinkDone(x.link)) { x.done = true; x.doneAt = t; ch = true; } });
   const keep = S.todos.filter(x => x.daily || !x.done || !x.doneAt || dayDiff(t, x.doneAt) <= 30);
   if (keep.length !== S.todos.length) { S.todos = keep; ch = true; }
   return ch;
@@ -1418,11 +1418,12 @@ function viewMStat() {
     h += '<section class="card c-money"><div class="sh2"><div class="a1b">수입은 어디로 갔나요</div></div>' + donut(parts, won(base), D.income > 0 ? '총 수입' : '총 사용', '수입 사용 비중') + '</section>';
   }
   const ids0 = Object.keys(D.byCat).sort((a, b) => D.byCat[b] - D.byCat[a]);
-  if (ids0.length) {
+  if (ids0.length || D.corpSum > 0) {
     const top = ids0.slice(0, 7).map((id, i) => { const c = st.cats.find(x => x.id === id); return { name: c ? c.name : '기타', v: D.byCat[id], color: DONUT_COLORS[i] }; });
     const restV = sum(ids0.slice(7).map(id => D.byCat[id]));
     if (restV > 0) top.push({ name: '그 외', v: restV, color: DONUT_COLORS[7] });
-    h += '<section class="card c-money"><div class="sh2"><div class="a1b">지출 카테고리 비중</div></div>' + donut(top, won(D.spent), '총 지출', '카테고리별 지출 비중') + '</section>';
+    if (D.corpSum > 0) top.push({ name: '회사카드', v: D.corpSum, color: '#8E8E93' });
+    h += '<section class="card c-money"><div class="sh2"><div class="a1b">지출 카테고리 비중</div></div>' + donut(top, won(D.spent + D.corpSum), '총 지출' + (D.corpSum > 0 ? ' (회사카드 포함)' : ''), '카테고리별 지출 비중') + '</section>';
   }
   h += '<!--col-->';
   // 3) 월별 한눈에 표
@@ -2176,7 +2177,7 @@ function viewMoney() {
   const corpAll = S.logs.exp.filter(x => x.corp).sort(byExpNewest), corpMonth = sum(corpAll.filter(x => x.d.slice(0, 7) === cur).map(x => x.amt));
   const corp = '<section class="group c-money"><div class="gh">회사카드 <span class="hint">내 지출·예산에는 넣지 않아요</span></div>' +
     '<div class="corpsum"><div><div class="gl1">' + (+cur.slice(5)) + '월 사용</div><div class="gl2">' + won(corpMonth) + '</div></div><div><div class="gl1">지금까지 합계</div><div class="gl2">' + won(sum(corpAll.map(x => x.amt))) + '</div></div></div>' +
-    (corpAll.length ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + corpAll.slice(0, 15).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '회사카드'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '') +
+    (corpAll.some(x => x.d.slice(0, 7) === cur) ? '<div class="xl">' + xhead('날짜', '내용', '', '금액') + corpAll.filter(x => x.d.slice(0, 7) === cur).map(x => xrow('editEntry', 'exp|' + x.id, [xd(x.d), esc(x.memo || '회사카드'), '', '−' + xwon(x.amt)], 'dim')).join('') + '</div>' : '') +
     '<button type="button" class="addrow" data-act="logCorp">' + ico('plus', 18, 2) + '회사카드 사용 추가</button></section>';
   const fx = st.fixed, fxSum = sum(fx.map(f => f.amt));
   const fixd = '<section class="group c-money"><div class="gh">고정 지출 <span class="hint">매달 정해진 날 자동으로 입력돼요' + (fx.length ? ' · 합계 ' + won(fxSum) : '') + '</span></div>' + (fx.length ? '<div class="xl">' + xhead('매월', '이름', '분류', '금액') + fx.map(f => xrow('editFixed', f.id, [f.day + '일', esc(f.name), esc(catName(f.cat)), xwon(f.amt)], '')).join('') + '</div>' : '') +
