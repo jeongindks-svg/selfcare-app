@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 70;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 71;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1879,7 +1879,9 @@ function viewPlanner() {
 /* ---------- 업무 폴더: 문제집으로 객관식·주관식·카드 공부 ---------- */
 const shuf = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
 const normAns = v => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, '').replace(/마력|hp|[φΦ"″”“]/g, '');
-const sameAns = (a, b) => { const x = normAns(a), y = normAns(b); if (!x) return false; if (x === y) return true; return /^[\d.]+$/.test(x) && /^[\d.]+$/.test(y) && Number(x) === Number(y); };
+const sameAns1 = (a, b) => { const x = normAns(a), y = normAns(b); if (!x) return false; if (x === y) return true; return /^[\d.]+$/.test(x) && /^[\d.]+$/.test(y) && Number(x) === Number(y); };
+/* 괄호 안의 내용은 안 적어도 정답이에요 (예: '6.35 (1/4")' → '6.35') */
+const sameAns = (a, b) => { const bare = String(b == null ? '' : b).replace(/\([^)]*\)/g, ' ').trim(); return sameAns1(a, b) || (!!bare && bare !== String(b).trim() && sameAns1(a, bare)); };
 const wkRec = id => S.work.rec[id] || { ok: 0, ng: 0, last: '' };
 const wkRate = d => { const r = d.cards.map(c => wkRec(c.id)), ok = sum(r.map(x => x.ok)), t = ok + sum(r.map(x => x.ng)); return t ? Math.round(100 * ok / t) : null; };
 function viewWork() {
