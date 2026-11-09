@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 71;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 72;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -567,7 +567,7 @@ function sheetSch(sid, day) {
     field('할 일', 'f-title', 'text', cur ? cur.title : '', 'maxlength="40" placeholder="예: 러닝"') +
     '<div class="fld"><label>반복</label>' + chipsHtml('rep', [{ v: 'once', l: cur && cur.d && cur.d !== schToday() ? md(cur.d) + '만' : (!cur && sd !== schToday() ? md(sd) + '만' : '오늘만') }, { v: 'days', l: '요일 선택' }, { v: 'wk', l: '평일' }, { v: 'daily', l: '매일' }], vals.rep) + '</div>' +
     '<div class="fld" id="dayswrap" style="display:' + (vals.rep === 'days' ? 'block' : 'none') + '"><label>요일</label><div class="chipsel" role="group">' + [1, 2, 3, 4, 5, 6, 0].map(i => '<button type="button" class="cs' + (vals.days.indexOf(i) >= 0 ? ' on' : '') + '" data-act="schDays" data-arg="' + i + '" aria-pressed="' + (vals.days.indexOf(i) >= 0) + '">' + WD[i] + '</button>').join('') + '</div></div>' +
-    (cur && day ? '<button type="button" class="btn ghost" data-act="schFail" data-arg="' + sid + '|' + day + '">' + (cur.fl && cur.fl[day] ? md(day) + ' 실패 되돌리기' : md(day) + ' 실패로 표시') + '</button>' : '') + (cur ? delBtn('sch|' + sid) : '') + ERR;
+    (cur && day ? '<button type="button" class="btn ghost" data-act="pgTgSheet" data-arg="' + sid + '|' + day + '">' + (cur.dn && cur.dn[day] ? md(day) + ' 완료 취소' : md(day) + ' 완료로 표시') + '</button>' : '') + (cur && day ? '<button type="button" class="btn ghost" data-act="schFail" data-arg="' + sid + '|' + day + '">' + (cur.fl && cur.fl[day] ? md(day) + ' 실패 되돌리기' : md(day) + ' 실패로 표시') + '</button>' : '') + (cur ? delBtn('sch|' + sid) : '') + ERR;
   openSheet(cur ? '일정 수정' : '일정 추가', body, () => {
     const rawT = String(val('f-t')).trim(), t = rawT ? parseHM(rawT) : '', e = String(val('f-e')).trim() ? parseHM(val('f-e')) : '', title = val('f-title').trim();
     if (t === null) return setErr('시작 시간을 24시간 형식으로 적어 주세요. 예: 0900');
@@ -1869,9 +1869,12 @@ function viewPlanner() {
   } else {
     const wk = NAV.pw || 0, mon = addDays(monOf(today), wk * 7), end = addDays(mon, 6), f = d => (+d.slice(5, 7)) + '.' + (+d.slice(8));
     h += monthNav(f(mon) + ' ~ ' + f(end), 'pgNav', true, wk === 0 ? '' : 'pgToday');
-    h += '<div class="pgweek">' + Array.from({ length: 7 }, (_, i) => {
+    /* 탁상달력처럼: 요일이 가로로 놓이고, 그 아래에 그날 할 일 */
+    h += '<div class="dk" role="grid" aria-label="이번 주 일정">' + Array.from({ length: 7 }, (_, i) => {
       const d = addDays(mon, i), its = schDayItems(d);
-      return '<section class="group pgd' + (d === today ? ' tdy' : '') + (its.length ? '' : ' empty') + '"><div class="gsh"><span class="gt">' + PG_WD[i] + ' ' + (+d.slice(8)) + '일</span><span class="gc">' + (its.length ? its.length + '개' : '') + '</span><button type="button" class="gadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">' + ico('plus', 16, 2.2) + '</button></div>' + its.map(x => pgItemRow(x, d)).join('') + '</section>';
+      return '<div class="dkc' + (d === today ? ' tdy' : '') + (i >= 5 ? ' we' : '') + '" role="gridcell"><button type="button" class="dkh" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가"><span>' + PG_WD[i] + '</span><b>' + (+d.slice(8)) + '</b></button>' +
+        its.map(x => { const dn = !!(x.dn && x.dn[d]), fl = !!(x.fl && x.fl[d]); return '<button type="button" class="dki' + (dn ? ' dn' : '') + (fl ? ' fl' : '') + '" data-act="editSch" data-arg="' + x.id + '|' + d + '">' + (x.t ? '<i>' + x.t + '</i>' : '') + esc(x.title) + '</button>'; }).join('') +
+        '<button type="button" class="dkadd" data-act="pgAdd" data-arg="' + d + '" aria-label="' + md(d) + ' 일정 추가">+</button></div>';
     }).join('') + '</div>';
   }
   return h;
@@ -3387,6 +3390,7 @@ const ACT = {
   pgToday() { NAV.pw = 0; NAV.pm = ''; NAV.pd = ''; render(); },
   pgTg(arg) { const p = arg.split('|'), x = S.sched.find(y => y.id === p[0]); if (!x) return; x.dn = x.dn || {}; x.fl = x.fl || {}; if (x.fl[p[1]]) delete x.fl[p[1]]; else if (x.dn[p[1]]) delete x.dn[p[1]]; else x.dn[p[1]] = true; commit(); render(); },
   schFail(arg) { const p = arg.split('|'), x = S.sched.find(y => y.id === p[0]); if (!x) return; x.dn = x.dn || {}; x.fl = x.fl || {}; if (x.fl[p[1]]) delete x.fl[p[1]]; else { x.fl[p[1]] = true; delete x.dn[p[1]]; } commit(); closeSheet(); render(); },
+  pgTgSheet(arg) { const p = arg.split('|'), x = S.sched.find(y => y.id === p[0]); if (!x) return; x.dn = x.dn || {}; x.fl = x.fl || {}; if (x.dn[p[1]]) delete x.dn[p[1]]; else { x.dn[p[1]] = true; delete x.fl[p[1]]; } commit(); closeSheet(); render(); },
   pgDay(arg) { NAV.pd = arg; render(); },
   pgAdd(arg) { NAV.pd = arg; NAV.sd = arg; sheetSch(); },
   addSd() { sheetSomeday(); }, editSd(arg) { sheetSomeday(arg); }, moveSd(arg) { sheetSdMove(arg); },
