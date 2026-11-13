@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 73;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 74;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -2331,6 +2331,7 @@ function viewSettings() {
   h += glabel('글자 크기 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="글자 크기">' + [['sm', '작게'], ['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']].map(x => '<button type="button" data-act="fontSize" data-arg="' + x[0] + '" aria-pressed="' + (FONT_SIZE === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   h += glabel('화면 배치 (이 기기에만 적용)') + '<div class="seg" role="group" aria-label="화면 배치">' + [['auto', '자동'], ['phone', '폰'], ['tablet', '태블릿']].map(x => '<button type="button" data-act="layoutPref" data-arg="' + x[0] + '" aria-pressed="' + (LAYOUT_PREF === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<p class="subline">지금 화면 크기 ' + vp.w + ' × ' + vp.h + ' · ' + LAYOUT_NAME[LAYOUT] + '</p>' +
+    '<button type="button" class="btn full ghost" data-act="checkUpdate">업데이트 확인</button>' +
     '<p class="subline">앱 버전 ' + APP_VERSION + ' · ' + (isStandalone() ? '설치한 앱' : '브라우저') + (deviceOrientation() ? ' · 기기 방향 ' + deviceOrientation() : '') + '</p>';
   let sy = '<section class="group"><div class="dnote">' + esc(syncStatusText()) + '</div>';
   if (PROV) sy += '<button type="button" class="drow" data-act="syncNow">지금 동기화</button>' + (PROV.name === 'gist' ? '<button type="button" class="drow danger" data-act="syncOff">이 기기 연결 해제</button>' : '');
@@ -3175,6 +3176,21 @@ const ACT = {
   moreToggle(arg, el) { const w = byId('morewrap'); if (!w) return; const open = w.style.display === 'none'; w.style.display = open ? 'block' : 'none'; el.setAttribute('aria-expanded', String(open)); el.classList.toggle('open', open); },
   saveMore() { if (!SHEET || !SHEET.onSave) return; SHEET.more = true; SHEET.onSave(); if (SHEET) SHEET.more = false; },
   noop() {},
+  async checkUpdate() {
+    toast('업데이트를 확인하는 중…');
+    let latest = null;
+    try {
+      const txt = await (await fetch('./app.js?chk=' + Date.now(), { cache: 'no-store' })).text();
+      const m = txt.match(/const APP_VERSION = (\d+)/); latest = m ? +m[1] : null;
+    } catch (err) { toast('인터넷 연결을 확인해 주세요'); return; }
+    if (latest != null && latest <= APP_VERSION) { toast('최신 버전이에요 (버전 ' + APP_VERSION + ')'); return; }
+    toast('새 버전 ' + (latest || '') + '으로 업데이트해요');
+    try {
+      if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); }
+      if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+    } catch (err) { /* 캐시를 못 지워도 새로고침은 해요 */ }
+    setTimeout(() => location.reload(), 400);
+  },
   catView(arg) { S.settings.catView = arg; S.settings.showBudget = arg !== 'none'; commit(); render(); },
   tgBudget() { S.settings.showBudget = !(S.settings.showBudget !== false); commit(); render(); },
   catAll() { NAV.catAll = !NAV.catAll; render(); },
