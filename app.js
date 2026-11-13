@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 72;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 73;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -3643,6 +3643,13 @@ function render(top) {
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
   if (top || !same) window.scrollTo(0, 0); else window.scrollTo(0, y);
+  quizFocus();
+}
+/* 컴퓨터(마우스·트랙패드)에서는 주관식 입력칸에 바로 커서를 놓아요. 폰은 키보드가 갑자기 뜨지 않게 그대로 둬요. */
+function quizFocus() {
+  if (NAV.route !== 'quiz' || !NAV.quiz || NAV.quiz.st !== 'ask' || NAV.quiz.mode !== 'short') return;
+  if (!(window.matchMedia && matchMedia('(pointer: fine)').matches)) return;
+  const el = byId('qa-in'); if (el && document.activeElement !== el) el.focus({ preventScroll: true });
 }
 function init() {
   const loaded = loadLocal();
@@ -3700,4 +3707,16 @@ function init() {
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector && document.querySelector('link[rel="manifest"]')) navigator.serviceWorker.register('./sw.js').catch(() => { /* 오프라인 캐시 없이 사용 */ });
 }
 if (typeof document !== 'undefined' && document.getElementById('view')) init();
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'qa-in') { e.preventDefault(); ACT.quizSubmit(); } });
+/* 문제 풀기 키보드: Enter = 확인 → 다음, 객관식은 1~4로 고르기, 카드는 Enter로 정답 보기 */
+document.addEventListener('keydown', e => {
+  const Q = NAV.quiz;
+  if (NAV.route !== 'quiz' || !Q || e.repeat || e.isComposing) return;
+  if (byId('sheet') && byId('sheet').classList.contains('open')) return;
+  if (e.key === 'Enter') {
+    if (Q.st === 'ask') { if (Q.mode === 'short') { e.preventDefault(); ACT.quizSubmit(); } else if (Q.mode === 'card') { e.preventDefault(); ACT.quizFlip(); } }
+    else if (Q.st === 'done' && Q.mode !== 'card') { e.preventDefault(); ACT.quizNext(); }
+    return;
+  }
+  if (Q.mode === 'mc' && Q.st === 'ask' && /^[1-4]$/.test(e.key) && Number(e.key) <= Q.opts.length && !(e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) { e.preventDefault(); ACT.quizPick(String(Number(e.key) - 1)); }
+  else if (Q.mode === 'card' && Q.st === 'done' && (e.key === '1' || e.key === '2')) { e.preventDefault(); ACT.quizGrade(e.key === '2' ? '1' : '0'); }
+});
