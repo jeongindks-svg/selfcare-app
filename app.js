@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 77;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 78;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1889,15 +1889,17 @@ const sameAns1 = (a, b) => { const x = normAns(a), y = normAns(b); if (!x) retur
 const sameAns = (a, b) => { const bare = String(b == null ? '' : b).replace(/\([^)]*\)/g, ' ').trim(); return sameAns1(a, b) || (!!bare && bare !== String(b).trim() && sameAns1(a, bare)); };
 const wkRec = id => S.work.rec[id] || { ok: 0, ng: 0, last: '' };
 const wkRate = d => { const r = d.cards.map(c => wkRec(c.id)), ok = sum(r.map(x => x.ok)), t = ok + sum(r.map(x => x.ng)); return t ? Math.round(100 * ok / t) : null; };
+const wkOn = d => !(S.work.off || []).includes(d.id);   // 전체 풀기에 넣을 문제집 (기본은 모두)
 function viewWork() {
-  const mode = ['mc', 'short', 'card'].indexOf(NAV.qm) >= 0 ? NAV.qm : 'mc', total = S.work.decks.reduce((t, d) => t + d.cards.length, 0);
-  const wrong = S.work.decks.reduce((t, d) => t + d.cards.filter(c => wkRec(c.id).last === 'ng').length, 0);
+  const mode = ['mc', 'short', 'card'].indexOf(NAV.qm) >= 0 ? NAV.qm : 'mc', on = S.work.decks.filter(wkOn), total = on.reduce((t, d) => t + d.cards.length, 0);
+  const wrong = on.reduce((t, d) => t + d.cards.filter(c => wkRec(c.id).last === 'ng').length, 0), allOn = on.length === S.work.decks.length;
   let h = backHdr('업무', 'book', 'sleep', '') + '<!--cols-->';
-  h += '<section class="card c-sleep"><div class="ml">전체 문제 풀기</div><div class="bigrow"><div class="big">' + total + '<span class="u">문제</span></div><div class="sm nm">' + S.work.decks.length + '개 문제집' + (wrong ? ' · 틀린 문제 ' + wrong + '개' : '') + '</div></div></section>';
+  h += '<section class="card c-sleep"><div class="ml">' + (allOn ? '전체 문제 풀기' : '선택한 문제집 풀기') + '</div><div class="bigrow"><div class="big">' + total + '<span class="u">문제</span></div><div class="sm nm">' + on.length + ' / ' + S.work.decks.length + '개 문제집' + (wrong ? ' · 틀린 문제 ' + wrong + '개' : '') + '</div></div></section>';
   h += '<div class="seg rangeseg" role="group" aria-label="방식">' + [['mc', '객관식'], ['short', '주관식'], ['card', '카드']].map(k => '<button type="button" data-act="quizOpt" data-arg="m|' + k[0] + '" aria-pressed="' + (mode === k[0]) + '">' + k[1] + '</button>').join('') + '</div>';
   if (wrong) h += '<div class="chipsel" role="group"><button type="button" class="cs' + (NAV.qw ? ' on' : '') + '" data-act="quizOpt" data-arg="w|1">틀린 것만</button></div>';
-  h += bigBtn('quizStart', '__all', 'sleep', '전체 풀기 시작') + '<!--col-->';
-  h += '<section class="group"><div class="gsh"><span class="gt">문제집</span><span class="gc">' + S.work.decks.length + '개</span><button type="button" class="gadd" data-act="addWkDeck" aria-label="새 문제집">' + ico('plus', 16, 2.2) + '</button></div>' + (S.work.decks.length ? S.work.decks.map(d => { const r = wkRate(d); return '<a href="#" class="lrow" data-act="go" data-arg="deck|' + d.id + '"><span class="lt"><span class="l1">' + esc(d.name) + '</span><span class="l2">' + d.cards.length + '문제' + (r == null ? '' : ' · 정답률 ' + r + '%') + '</span></span>' + CHEV + '</a>'; }).join('') : '<div class="emptyrow">문제집이 없어요</div>') + '</section>';
+  h += bigBtn('quizStart', '__all', 'sleep', (allOn ? '전체 풀기 시작' : '선택한 ' + on.length + '개 풀기 시작')) + '<!--col-->';
+  h += '<section class="group"><div class="gsh"><span class="gt">문제집</span><span class="gc">체크한 것만 함께 풀어요</span><button type="button" class="lnk wkall" data-act="wkSelAll">' + (allOn ? '모두 해제' : '모두 선택') + '</button><button type="button" class="gadd" data-act="addWkDeck" aria-label="새 문제집">' + ico('plus', 16, 2.2) + '</button></div>' +
+    (S.work.decks.length ? S.work.decks.map(d => { const r = wkRate(d), ck = wkOn(d); return '<div class="wkrow' + (ck ? '' : ' off') + '"><button type="button" class="lick" data-act="wkSel" data-arg="' + d.id + '" aria-pressed="' + ck + '" aria-label="' + esc(d.name) + (ck ? ' 빼기' : ' 넣기') + '">' + (ck ? DONE_SVG : TODO_SVG) + '</button><a href="#" class="lrow" data-act="go" data-arg="deck|' + d.id + '"><span class="lt"><span class="l1">' + esc(d.name) + '</span><span class="l2">' + d.cards.length + '문제' + (r == null ? '' : ' · 정답률 ' + r + '%') + '</span></span>' + CHEV + '</a></div>'; }).join('') : '<div class="emptyrow">문제집이 없어요</div>') + '</section>';
   return h;
 }
 function viewDeck() {
@@ -1927,7 +1929,7 @@ function quizRec(key, ok) { const f = qFind(key); if (!f) return; const id = f.c
 function viewQuiz() {
   const Q = NAV.quiz, all = Q && Q.deck === '__all', dk = Q && !all && S.work.decks.find(d => d.id === Q.deck);
   if (!Q || (!all && !dk)) return viewWork();
-  let h = backHdr(all ? '전체 문제' : esc(dk.name), 'book', 'sleep', '');
+  let h = backHdr(all ? (S.work.decks.every(wkOn) ? '전체 문제' : '선택한 문제') : esc(dk.name), 'book', 'sleep', '');
   if (Q.st === 'end') {
     const n = Q.ids.length, pct = n ? Math.round(100 * Q.ok / n) : 0;
     h += '<section class="card c-sleep"><div class="ml">결과</div><div class="big">' + Q.ok + '<span class="u">/ ' + n + ' · ' + pct + '%</span></div><div class="track"><div style="width:' + pct + '%"></div></div></section>';
@@ -3399,14 +3401,16 @@ const ACT = {
   quizStart(arg) {
     const all = arg === '__all', dk = all ? null : S.work.decks.find(d => d.id === arg);
     if (!all && !dk) return;
-    let keys = (all ? S.work.decks : [dk]).reduce((a, d) => a.concat(d.cards.map(c => ({ k: d.id + '|' + c.id, id: c.id }))), []);
+    let keys = (all ? S.work.decks.filter(wkOn) : [dk]).reduce((a, d) => a.concat(d.cards.map(c => ({ k: d.id + '|' + c.id, id: c.id }))), []);
     if (NAV.qw) { const w = keys.filter(x => wkRec(x.id).last === 'ng'); if (w.length) keys = w; }
     const ids = shuf(keys).map(x => x.k);   // 문제 수 제한 없이 전부
-    if (!ids.length) { toast('문제를 먼저 추가해 주세요'); return; }
+    if (!ids.length) { toast(all ? '풀 문제집을 하나 이상 체크해 주세요' : '문제를 먼저 추가해 주세요'); return; }
     const Q = NAV.quiz = { deck: all ? '__all' : dk.id, mode: ['mc', 'short', 'card'].indexOf(NAV.qm) >= 0 ? NAV.qm : 'mc', dir: !all && NAV.qd === 'aq' && !dk.noRev ? 'aq' : 'qa', ids: ids, i: 0, ok: 0, wrong: [], st: 'ask' };
     quizQ(Q);
     if (NAV.route === 'quiz') render(); else ACT.go('quiz');
   },
+  wkSel(arg) { const off = S.work.off = (S.work.off || []).slice(), k = off.indexOf(arg); if (k >= 0) off.splice(k, 1); else off.push(arg); commit(); render(); },
+  wkSelAll() { S.work.off = S.work.decks.every(wkOn) ? S.work.decks.map(d => d.id) : []; commit(); render(); },
   quizAnswer(ok) { const Q = NAV.quiz, id = Q.ids[Q.i]; Q.st = 'done'; Q.ok1 = ok; if (ok) Q.ok++; else Q.wrong.push(id); quizRec(id, ok); render(); },
   quizPick(arg) { const Q = NAV.quiz; if (!Q || Q.st !== 'ask') return; const f = qFind(Q.ids[Q.i]); if (!f) return; const k = Number(arg); Q.pick = k; ACT.quizAnswer(Q.opts[k] === qAns(Q, f)); },
   quizSubmit() { const Q = NAV.quiz; if (!Q || Q.st !== 'ask') return; const el = byId('qa-in'), f = qFind(Q.ids[Q.i]); if (!f) return; Q.text = el ? el.value : ''; ACT.quizAnswer(sameAns(Q.text, qAns(Q, f))); },
