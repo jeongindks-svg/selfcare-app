@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 74;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 75;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -3661,11 +3661,16 @@ function render(top) {
   if (top || !same) window.scrollTo(0, 0); else window.scrollTo(0, y);
   quizFocus();
 }
-/* 컴퓨터(마우스·트랙패드)에서는 주관식 입력칸에 바로 커서를 놓아요. 폰은 키보드가 갑자기 뜨지 않게 그대로 둬요. */
+/* 컴퓨터·태블릿(키보드를 함께 쓰는 기기)에서는 주관식 입력칸에 바로 커서를 놓고,
+   확인한 뒤에는 '다음' 버튼에 포커스를 둬서 Enter 로 넘어가요. 폰은 화면 키보드가 갑자기 뜨지 않게 그대로 둬요. */
+const kbDevice = () => (window.matchMedia && matchMedia('(pointer: fine)').matches) || Math.min(screen.width || 0, screen.height || 0) >= 700;
 function quizFocus() {
-  if (NAV.route !== 'quiz' || !NAV.quiz || NAV.quiz.st !== 'ask' || NAV.quiz.mode !== 'short') return;
-  if (!(window.matchMedia && matchMedia('(pointer: fine)').matches)) return;
-  const el = byId('qa-in'); if (el && document.activeElement !== el) el.focus({ preventScroll: true });
+  const Q = NAV.quiz;
+  if (NAV.route !== 'quiz' || !Q || !kbDevice()) return;
+  let el = null;
+  if (Q.st === 'ask' && Q.mode === 'short') el = byId('qa-in');
+  else if (Q.st === 'done' && Q.mode !== 'card') el = document.querySelector('#view [data-act="quizNext"]');
+  if (el && document.activeElement !== el) el.focus({ preventScroll: true });
 }
 function init() {
   const loaded = loadLocal();
