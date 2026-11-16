@@ -1112,3 +1112,12 @@ html[data-side] .onecol:has(> .dk){max-width:1080px;margin-inline:auto}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .dki{background:rgba(10,132,255,.22)}}
 :root[data-theme="dark"] .dki{background:rgba(10,132,255,.22)}
 .qcard .qdk{display:inline-block;font-size:12px;font-weight:600;color:var(--sub);background:var(--track2);border-radius:10px;padding:2px 10px;margin-bottom:8px}
+
+/* v78: 문제집 골라서 풀기 */
+.wkrow{display:flex;align-items:center;border-top:1px solid var(--line)}
+.wkrow .lick{flex:none;min-width:48px;padding-left:6px}
+.wkrow .lrow{flex:1;min-width:0;border-top:0;padding-left:2px}
+.wkrow.off .l1,.wkrow.off .l2{opacity:.5}
+.lick svg.on circle{fill:var(--cb,var(--link))}
+.wkall{font-size:13px;margin-left:auto;margin-right:4px}
+.gsh .wkall + .gadd{margin-left:0}
