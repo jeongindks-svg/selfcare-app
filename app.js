@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 80;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 81;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1954,7 +1954,7 @@ function viewQuiz() {
   else if (Q.mode === 'short') h += '<div class="fld"><input id="qa-in" class="tin qin" type="text" autocomplete="off" autocapitalize="off" inputmode="text" enterkeyhint="done" placeholder="답을 입력"' + (done ? ' disabled value="' + esc(Q.text || '') + '"' : '') + '></div>' + (done ? '' : '<button type="button" class="btn full c-sleep" data-act="quizSubmit">확인</button>');
   else if (!done) h += '<button type="button" class="btn full ghost" data-act="quizFlip">정답 보기</button>';
   if (done) {
-    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요' : '정답: <b>' + esc(ans) + '</b>') + '</div>' + (c.x ? '<div class="qexp">' + esc(c.x) + '</div>' : '');
+    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요<br><b>' + esc(ans) + '</b>' : '정답: <b>' + esc(ans) + '</b>') + '</div>' + (c.x ? '<div class="qexp">' + esc(c.x) + '</div>' : '');
     h += Q.mode === 'card' ? '<div class="btnpair"><button type="button" class="btn ghost" data-act="quizGrade" data-arg="0">몰랐어요</button><button type="button" class="btn c-sleep" data-act="quizGrade" data-arg="1">알았어요</button></div>' : '<button type="button" class="btn full c-sleep" data-act="quizNext">' + (Q.i + 1 >= Q.ids.length ? '결과 보기' : '다음') + '</button>';
   }
   return h;
