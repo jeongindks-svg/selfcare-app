@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 78;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 79;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -15,9 +15,11 @@ const WORK_SEED = [{ id: 'hp', v: 1, name: '에어컨 용량별 마력', ql: '�
   { id: 'pipe1', v: 2, upd: 'merge', name: '냉매배관 외경 · 인치', ql: '외경(Φ, mm)', al: '인치', cards: [['Φ6.35', '1/4"'], ['Φ9.52', '3/8"'], ['Φ12.7', '1/2"'], ['Φ15.88', '5/8"'], ['Φ19.05', '3/4"'], ['Φ22.22', '7/8"'], ['Φ25.4', '1"'], ['Φ28.58', '1-1/8"'], ['Φ31.75', '1-1/4"'], ['Φ38.1', '1-1/2"']] },
   { id: 'pipe2', v: 2, upd: 'replace', noRev: true, name: '냉매배관 상식', ql: '질문', al: '답', cards: [['한 쌍의 배관에서 더 가는 관은?', '액관'], ['한 쌍의 배관에서 더 굵은 관은?', '가스관'], ['벽걸이 에어컨의 배관 (액관 / 가스관)', '6.35 / 9.52'], ['스탠드 에어컨의 배관 (액관 / 가스관)', '6.35 / 15.88'], ['가정용에서 가장 많이 쓰는 액관 사이즈는?', '6.35 (1/4")'], ['용량이 커질수록 배관은?', '액관과 가스관이 함께 굵어진다'], ['실제 배관 규격은 어디서 확인?', '실외기 명판 · 설치설명서'], ['R410A · R32 배관 두께는?', '규정 두께 이상 (압력이 높아서)'], ['같은 외경인데 다른 것은?', '두께 (0.7 / 0.8 / 1.0T)'], ['냉방 운전 시 고압 배관은?', '액관'], ['냉방 운전 시 저압 배관은?', '가스관'], ['난방 운전 시 고압 배관은?', '가스관'], ['팽창밸브가 실외기에 있는 인버터 기종, 냉방 때 정확히 확인하려면?', '게이지로 확인']] },
   { id: 'hole1', v: 4, name: '실내기 타공치수', ql: '실내기', al: '타공치수 (mm)', cards: [['1way 소형 (016~020PBH2)', '860 * 380'], ['1way 중형 (020PBH1~040)', '1150 * 440'], ['1way 대형 (052~072)', '1380 * 470'], ['2way', '950 * 600'], ['4way 미니', '600 * 600'], ['4way', '900 * 900'], ['360', '950 * 950']] },
-  { id: 'hole2', v: 4, noRev: true, name: '1way 모델별 타공치수', ql: '1way 모델', al: '타공치수 (mm)', cards: [['016', '860 * 380'], ['020PBH2', '860 * 380'], ['020PBH1', '1150 * 440'], ['023', '1150 * 440'], ['032', '1150 * 440'], ['040', '1150 * 440'], ['052', '1380 * 470'], ['060', '1380 * 470'], ['072', '1380 * 470']] }];
-const seedDeck = d => ({ id: d.id, name: d.name, ql: d.ql, al: d.al, noRev: !!d.noRev, cards: d.cards.map((c, i) => ({ id: d.id + i, q: c[0], a: c[1] })) });
-const WORK_V = 4;
+  { id: 'hole2', v: 4, noRev: true, name: '1way 모델별 타공치수', ql: '1way 모델', al: '타공치수 (mm)', cards: [['016', '860 * 380'], ['020PBH2', '860 * 380'], ['020PBH1', '1150 * 440'], ['023', '1150 * 440'], ['032', '1150 * 440'], ['040', '1150 * 440'], ['052', '1380 * 470'], ['060', '1380 * 470'], ['072', '1380 * 470']] },
+  { id: 'field', v: 5, noRev: true, name: '시스템 에어컨 현장 용어', ql: '질문', al: '답', cards: [["냉매배관 한 조에서 가는 관은?", "액관 (리퀴드관)", "실내기 1대에 한 조로 붙어요."], ["냉매배관 한 조에서 굵은 관은?", "가스관 (석션관)", "냉방 때 가스관이 차가워 결로가 가장 많이 생겨요."], ["3/8\" 동관의 외경은?", "9.52 mm", ""], ["3/8\" 동관의 현장 호칭은?", "삼부", "1인치를 8부로 나눈 일본식 호칭. 1/4\" 이부, 1/2\" 사부, 5/8\" 오부."], ["동관을 자를 때 쇠톱 대신 파이프 커터를 쓰는 이유는?", "쇳가루가 관 속에 들어가지 않게", "관 속 이물질은 팽창밸브·압축기 고장의 원인. 직각 절단도 쉬워요."], ["보관하는 동관 끝을 캡·테이프로 막지 않으면?", "먼지·수분 유입 → 진공이 잘 안 잡히고 팽창밸브 막힘", "겉으로 멀쩡해 보여도 문제가 생기는 대표적 실수예요."], ["동관 끝을 나팔 모양으로 벌리고 너트로 조여 잇는 방식의 정식 명칭은?", "플레어 이음 (Flare joint)", "현장 호칭 '후레아'. 냉매 누설이 가장 많이 생기는 곳이에요."], ["플레어 가공에서 나팔을 내기 전에 반드시 할 일은?", "너트를 관에 먼저 끼운다", "빠뜨리면 잘라 내고 처음부터 다시 가공해야 해요."], ["리머로 버(거스러미)를 제거할 때 관 입구 방향은?", "아래로 (부스러기가 관 속으로 안 들어가게)", "버 제거는 플레어 면 밀착과 이물질 방지 두 가지 목적."], ["플레어 너트 조임이 부족하면?", "누설", "토크렌치로 조여요. 예: 6.35 mm 14~18 N·m, 12.70 mm 49~61 N·m. 제조사 값 우선."], ["플레어 너트 조임이 지나치면?", "나팔부가 갈라짐 (크랙)", ""], ["용접(브레이징) 중 관 속에 질소를 흘리는 목적은?", "관 안쪽 산화 스케일(산화막) 생성 방지", "스케일은 전자팽창밸브·스트레이너를 막고 압축기를 상하게 해요."], ["질소 대신 관에 넣으면 절대 안 되는 가스는?", "산소, 압축공기, LPG", "질소 용기 + 레귤레이터만 사용해요."], ["질소 대신 산소를 넣으면 위험한 이유는?", "냉동기유와 만나 폭발 위험", ""], ["동관끼리 플럭스 없이 접합할 때 쓰는 용가재는?", "인동납 (BCuP)", "은이 들어간 인동납도 포함. 은납(BAg)은 서로 다른 금속을 이을 때 쓰고 플럭스가 필요해요."], ["서비스 밸브 가까이에서 용접할 때 밸브 보호 방법은?", "젖은 천으로 감싸 열을 식힘", "열로 밸브 내부가 손상되는 것을 막아요."], ["기밀시험 1단계 (R410A 예시)", "0.3 MPa 3분 이상", "큰 누설부터 단계적으로 확인. 기준은 냉매·제조사별로 달라요."], ["기밀시험 2단계 (R410A 예시)", "1.5 MPa 3분 이상", ""], ["기밀시험 3단계 (R410A 예시)", "4.0 MPa 24시간", ""], ["주변 온도가 1°C 바뀔 때 시험 압력 변화는?", "약 0.01 MPa", "가압 시와 확인 시의 온도를 함께 기록해 보정해요."], ["기밀시험 중 실외기 서비스 밸브는?", "닫아 둔다 (실외기에는 이미 냉매가 들어 있음)", "현장 배관만 시험 범위예요."], ["압력이 떨어졌을 때 새는 곳을 찾는 기본 방법은?", "접속부에 비눗물(누설 검지액)을 발라 거품 확인", "합격 후 질소를 빼고 바로 진공 작업으로."], ["진공 작업의 목표 진공도는?", "500 micron 이하 (약 67 Pa)", "제조사 기준이 있으면 그 값을 따라요."], ["진공도를 정밀하게 판정하려면 어떤 게이지?", "마이크론 게이지 (진공 게이지)", "매니폴드 −76 cmHg 눈금으로는 정밀 판정이 안 돼요."], ["펌프를 멈춘 뒤 진공도가 계속 오르면?", "누설", "정상은 거의 오르지 않고 유지돼요."], ["펌프를 멈춘 뒤 진공도가 오르다가 멈추면?", "수분 잔류", ""], ["진공 작업을 끝낼 때 먼저 할 일은?", "밸브 먼저 닫고 펌프를 끈다", "반대로 하면 펌프 오일이 배관으로 역류해요. 펌프 오일도 주기적으로 교체."], ["냉매 추가량 계산의 기준이 되는 관은?", "액관 (길이 기준)", "저울로 계량하고 충전량을 명판·기록지에 기록해요."], ["R410A는 어떤 상태로 충전하나?", "액체 상태", ""], ["분기관을 '레피넷'이라고 부르는 이유는?", "특정 제조사 분기관 상표명(REFNET)이 일반 명칭처럼 굳은 말", "문서에는 '냉매 분기관' 또는 제조사 모델명을 써요."], ["분기관 모델 선정 기준은?", "분기관 뒤에 연결되는 실내기 용량의 합계", "제조사 선정표에서 선택, 전용품만 사용."], ["엘보 바로 뒤에 분기관을 붙이면 안 되는 이유는?", "꺾인 직후 냉매가 한쪽으로 쏠려 분배가 틀어짐", ""], ["분기관 앞 일반적인 직관 확보 길이는?", "0.5 m 이상", "분기관과 분기관 사이도 직관을 확보해요."], ["'아마플렉스'의 정식 명칭은?", "고무발포 보온재", "'아마플렉스'는 외국 브랜드명(Armaflex)에서 온 말."], ["액관과 가스관을 따로 보온하는 이유는?", "두 관이 서로 열을 주고받아 성능이 떨어짐", "각각 보온한 뒤 마감 테이프로 함께 감는 것은 가능해요."], ["행거 밴드가 보온재를 눌러 결로가 생기는 것을 막는 부속은?", "보온 받침 (새들)", "보온재가 눌리면 두께가 줄어 그 자리에 결로가 생겨요."], ["드레인 펌프가 물을 끌어올릴 수 있는 높이는?", "양정", "기종별 한도가 있으며 넘기면 물이 다 빠지지 않아요."], ["드레인업 배관을 올린 뒤 수평으로 끌다가 다시 올리면?", "펌프가 멈출 때 관 속 물이 역류해 드레인팬이 넘침", "올릴 곳은 실내기 근처에서 한 번에, 이후는 내림 구배."], ["덕트형 실내기 배수에 트랩이 필요한 이유는?", "음압 구조라 물이 잘 안 빠지고 넘침", "송풍기가 드레인팬 쪽 공기를 빨아들여요. 트랩(봉수)은 냄새 역류도 막아요."], ["천장을 막기 전 드레인팬에 물을 부어 확인하는 시험은?", "통수 시험", "펌프 작동·배수·접속부 누수를 함께 확인해요."], ["멀티에서 실내기마다 번호를 붙이는 작업의 현장 호칭은?", "어드레스 (주소 설정)", "스위치 설정 또는 자동 주소 기능으로 지정해요."], ["실내기 어드레스(번호)가 겹치면?", "통신 에러", ""]] },
+  { id: 'slang', v: 5, name: '현장 은어 → 바른 말', ql: '현장 은어', al: '바른 말', cards: [["덴조", "천장"], ["반생", "결속선"], ["시마이", "마무리"], ["히스리", "콘크리트 깨기 (치핑)"], ["단도리", "사전 준비"], ["데모도", "조공 (보조 작업자)"]] }];
+const seedDeck = d => ({ id: d.id, name: d.name, ql: d.ql, al: d.al, noRev: !!d.noRev, cards: d.cards.map((c, i) => Object.assign({ id: d.id + i, q: c[0], a: c[1] }, c[2] ? { x: c[2] } : {})) });
+const WORK_V = 5;
 const seedWork = () => ({ decks: WORK_SEED.map(seedDeck), rec: {}, seedV: WORK_V });
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -1940,13 +1942,13 @@ function viewQuiz() {
   const f = qFind(Q.ids[Q.i]); if (!f) return viewWork();
   const c = f.c, d = f.d, qa = Q.dir === 'qa', big = qa ? c.q : c.a, ans = qa ? c.a : c.q, ask = (qa ? d.al : d.ql), given = qa ? d.ql : d.al;
   h += '<div class="qprog"><div class="track"><div style="width:' + (100 * Q.i / Q.ids.length).toFixed(0) + '%"></div></div><span>' + (Q.i + 1) + ' / ' + Q.ids.length + '</span></div>';
-  h += '<section class="card qcard c-sleep">' + (all ? '<div class="qdk">' + esc(d.name) + '</div>' : '') + '<div class="ql">' + esc(given) + '</div><div class="qbig' + (String(big).length > 10 ? ' qlong' : '') + '">' + esc(big) + '</div><div class="ql">' + esc(ask) + '은(는)?</div></section>';
+  h += '<section class="card qcard c-sleep">' + (all ? '<div class="qdk">' + esc(d.name) + '</div>' : '') + '<div class="ql">' + esc(given) + '</div><div class="qbig' + (String(big).length > 10 ? ' qlong' : '') + '">' + esc(big) + '</div>' + (ask === '답' ? '' : '<div class="ql">' + esc(ask) + '은(는)?</div>') + '</section>';
   const done = Q.st === 'done';
   if (Q.mode === 'mc') h += '<div class="qopts">' + Q.opts.map((o, k) => '<button type="button" class="qopt' + (String(o).length > 8 ? ' long' : '') + (done ? (o === ans ? ' right' : Q.pick === k ? ' wrong' : '') : '') + '" data-act="quizPick" data-arg="' + k + '"' + (done ? ' disabled' : '') + '>' + esc(o) + '</button>').join('') + '</div>';
   else if (Q.mode === 'short') h += '<div class="fld"><input id="qa-in" class="tin qin" type="text" autocomplete="off" autocapitalize="off" inputmode="text" enterkeyhint="done" placeholder="답을 입력"' + (done ? ' disabled value="' + esc(Q.text || '') + '"' : '') + '></div>' + (done ? '' : '<button type="button" class="btn full c-sleep" data-act="quizSubmit">확인</button>');
   else if (!done) h += '<button type="button" class="btn full ghost" data-act="quizFlip">정답 보기</button>';
   if (done) {
-    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요' : '정답: <b>' + esc(ans) + '</b>') + '</div>';
+    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요' : '정답: <b>' + esc(ans) + '</b>') + '</div>' + (c.x ? '<div class="qexp">' + esc(c.x) + '</div>' : '');
     h += Q.mode === 'card' ? '<div class="btnpair"><button type="button" class="btn ghost" data-act="quizGrade" data-arg="0">몰랐어요</button><button type="button" class="btn c-sleep" data-act="quizGrade" data-arg="1">알았어요</button></div>' : '<button type="button" class="btn full c-sleep" data-act="quizNext">' + (Q.i + 1 >= Q.ids.length ? '결과 보기' : '다음') + '</button>';
   }
   return h;
@@ -1970,12 +1972,12 @@ function sheetWkDeck(did) {
 function sheetWkCard(did, cid) {
   const d = S.work.decks.find(x => x.id === did), cur = d && cid ? d.cards.find(x => x.id === cid) : null;
   if (!d || (cid && !cur)) return;
-  const body = field(d.ql, 'f-q', 'text', cur ? cur.q : '', 'maxlength="60"') + field(d.al, 'f-a', 'text', cur ? cur.a : '', 'maxlength="60"') + (cur ? delBtn('wc|' + did + '|' + cid) : '') + ERR;
+  const body = field(d.ql, 'f-q', 'text', cur ? cur.q : '', 'maxlength="80"') + field(d.al, 'f-a', 'text', cur ? cur.a : '', 'maxlength="80"') + area('해설 (선택)', 'f-x', cur ? cur.x || '' : '', 'maxlength="200" rows="2"') + (cur ? delBtn('wc|' + did + '|' + cid) : '') + ERR;
   openSheet(cur ? '문제 수정' : '문제 추가', body, () => {
     const q = val('f-q').trim(), a = val('f-a').trim();
     if (!q || !a) return setErr('둘 다 입력해 주세요.');
     const rec = cur || { id: 'wc' + uid() };
-    rec.q = q; rec.a = a;
+    rec.q = q; rec.a = a; const x = val('f-x').trim(); if (x) rec.x = x; else delete rec.x;
     if (!cur) d.cards.push(rec);
     done();
   }, { focus: !cur });
