@@ -1121,3 +1121,4 @@ html[data-side] .onecol:has(> .dk){max-width:1080px;margin-inline:auto}
 .lick svg.on circle{fill:var(--cb,var(--link))}
 .wkall{font-size:13px;margin-left:auto;margin-right:4px}
 .gsh .wkall + .gadd{margin-left:0}
+.qexp{margin:-4px 0 12px;padding:10px 14px;border-radius:12px;background:var(--track2);color:var(--text2);font-size:14px;line-height:1.5;text-align:left}
