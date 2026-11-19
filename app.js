@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 81;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 82;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1524,7 +1524,7 @@ function viewRunAll(e) {
   const pts = (m === 'pace' ? recs.filter(x => x.m > 0 && x.v > 0).map(x => ({ d: x.d, v: x.m / x.v })) : recs.filter(x => x.v > 0).map(x => ({ d: x.d, v: x.v })));
   const last = pts.length ? pts[pts.length - 1].v : null, best = pts.length ? (m === 'pace' ? Math.min : Math.max).apply(null, pts.map(p => p.v)) : null;
   const fm = v => m === 'pace' ? fmtPace(v) : fmtN(v, 1);
-  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl(true) + '<!--cols-->';
+  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + runDistSeg(e) + segCtl(true) + '<!--cols-->';
   h += '<section class="card c-' + e.cls + '"><div class="ml">지금까지 기록 · ' + pts.length + '회</div><div class="big">' + (last == null ? dash : fm(last) + '<span class="u">' + (m === 'pace' ? '/km' : 'km') + '</span>') + '</div>' +
     '<div class="sm">' + (best == null ? '아직 기록이 없어요' : '가장 좋은 기록 ' + fm(best) + (m === 'pace' ? ' /km' : ' km') + ' · 맨 오른쪽이 가장 최근이에요') + '</div>' +
     '<div class="chipsel" role="group" aria-label="보기">' + [['pace', '페이스'], ['dist', '거리']].map(x => '<button type="button" class="cs' + (m === x[0] ? ' on' : '') + '" data-act="runMetric" data-arg="' + x[0] + '" aria-pressed="' + (m === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
@@ -1532,14 +1532,38 @@ function viewRunAll(e) {
   h += bigBtn('logEx', e.id, e.cls, '기록 추가');
   return h + '<!--col-->' + goalsCard(e);
 }
+/* 러닝: 전체 / 3km / 5km 기록을 따로 봐요 (거리의 ±10% 안에서 달린 기록을 그 거리로 환산) */
+const RUN_SPLIT = [3, 5];
+function runDistSeg(e) {
+  if (e.id !== 'run') return '';
+  const cur = RUN_SPLIT.indexOf(Number(NAV.rdist)) >= 0 ? String(NAV.rdist) : '';
+  return '<div class="seg rangeseg rdseg" role="group" aria-label="거리별 기록">' + [['', '전체'], ['3', '3km'], ['5', '5km']].map(k => '<button type="button" data-act="runDist" data-arg="' + k[0] + '" aria-pressed="' + (cur === k[0]) + '">' + k[1] + '</button>').join('') + '</div>';
+}
+function viewRunDist(e, km) {
+  const D = RUN_DISTS.find(x => x.d === km), recs = (S.logs.ex[e.id] || []).filter(r => r.v >= km * 0.9 && r.v <= km * 1.1).slice().sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  const timed = recs.filter(r => r.m > 0).map(r => ({ id: r.id, d: r.d, v: r.m * km / r.v, raw: r }));
+  const best = timed.length ? timed.reduce((b, r) => r.v < b.v ? r : b) : null, last = timed.length ? timed[timed.length - 1] : null, from30 = addDays(todayStr(), -29), in30 = timed.filter(r => r.d >= from30);
+  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + runDistSeg(e) + '<!--cols-->';
+  h += '<section class="card c-' + e.cls + '"><div class="ml">' + D.label + ' 최고 기록</div><div class="big">' + (best ? fmtRec(best.v) : dash) + '</div>' +
+    '<div class="sm">' + (timed.length ? timed.length + '회' + (last ? ' · 최근 ' + fmtRec(last.v) : '') + (in30.length ? ' · 30일 평균 ' + fmtRec(sum(in30.map(r => r.v)) / in30.length) : '') + (best ? ' · 페이스 ' + fmtPace(best.v / km) + ' /km' : '') : '아직 ' + D.label + ' 기록이 없어요') + '</div>' +
+    '<div class="pacebox">' + allChart(timed.map(r => ({ d: r.d, v: r.v })), { cls: e.cls, fmt: fmtRec, better: 'low', label: D.label + ' 기록 변화', empty: '시간을 함께 적으면 ' + D.label + ' 기록 그래프가 그려져요.' }) + '</div>' + (timed.length ? '<div class="sm cap">위쪽이 더 빨라요 · ' + (km * 0.9).toFixed(1) + '~' + (km * 1.1).toFixed(1) + 'km 기록을 ' + D.label + '로 환산</div>' : '') + '</section>';
+  h += bigBtn('logRunKm', String(km), e.cls, D.label + ' 기록 추가') + '<!--col-->';
+  const list = recs.slice().reverse();
+  h += '<section class="group"><div class="gh">' + D.label + ' 기록 <span class="hint">' + recs.length + '회 · 눌러서 수정</span></div>' + (list.length ? list.map(r => {
+    const t = r.m > 0 ? r.m * km / r.v : null, isBest = best && best.id === r.id;
+    return entryRow('ex|' + e.id + '|' + r.id, dateLabel(r.d), exVal(r.v, e) + (r.m > 0 ? ' · 페이스 ' + fmtPace(r.m / r.v) + ' /km' : ' · 시간 없음') + (isBest ? ' <span class="pbtag gold">최고</span>' : ''), t != null ? fmtRec(t) : dash);
+  }).join('') : '<div class="emptyrow">아직 기록이 없어요.</div>') + '</section>';
+  return h;
+}
 function viewRun(e) {
+  if (e.id === 'run' && RUN_SPLIT.indexOf(Number(NAV.rdist)) >= 0) return viewRunDist(e, Number(NAV.rdist));
   if (NAV.exall) return viewRunAll(e);
   const r = NAV.range, rs = runStats(e), items = paceBuckets(e, r);
   const set = [].concat.apply([], bucketDays(r).map(b => b.days));
   const inRange = rs.all.filter(x => set.indexOf(x.d) >= 0);
   const pRange = paceOf(inRange), fast = inRange.length ? Math.min.apply(null, inRange.map(x => x.m / x.v)) : null;
   const label = { week: '7일 평균 페이스', month: '5주 평균 페이스', half: '6개월 평균 페이스' }[r];
-  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + segCtl(true) + '<!--cols-->';
+  let h = backHdr(esc(e.name), exIcon(e), e.cls, editLink('exercise:' + e.id)) + runDistSeg(e) + segCtl(true) + '<!--cols-->';
   h += '<section class="card c-' + e.cls + '"><div class="ml">' + label + '</div><div class="big">' + (pRange == null ? dash : fmtPace(pRange) + '<span class="u">/km</span>') + '</div>' +
     '<div class="sm">' + (inRange.length ? inRange.length + '회 기록 · 가장 빠른 페이스 ' + fmtPace(fast) + ' /km' : '이 기간에 시간을 적은 기록이 없어요') + '</div>' +
     '<div class="pacebox">' + paceChart(items) + '</div>' + (rs.all.length ? '<div class="sm cap">위쪽이 더 빨라요 · 점이 없는 곳은 기록이 없는 구간이에요</div>' : '') + '</section>';
@@ -2453,11 +2477,12 @@ function switchTimeMode() {
   const w = byId('timewrap'); if (w) w.innerHTML = timeFieldsHtml(v);
   updateRunPreview();
 }
-function sheetLogRun(e, cur, eid, t) {
+function sheetLogRun(e, cur, eid, t, preKm) {
   const total = cur && cur.m > 0 ? Math.round(cur.m * 60) : 0;
   const vals = { tmode: 'time', shown: 'time', min: total ? Math.floor(total / 60) : '', sec: total ? total % 60 : '', pmin: '', psec: '' };
   const body = field('날짜', 'f-date', 'date', cur ? cur.d : t, 'max="' + t + '"') +
-    '<div class="fld"><label for="f-val">거리 (' + esc(e.unit) + ')</label><input id="f-val" class="tin" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 5.0" value="' + esc(cur ? cur.v : '') + '" data-inp="runPrev"></div>' +
+    '<div class="fld"><label for="f-val">거리 (' + esc(e.unit) + ')</label><input id="f-val" class="tin" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 5.0" value="' + esc(cur ? cur.v : (preKm || '')) + '" data-inp="runPrev"></div>' +
+    (e.id === 'run' ? '<div class="chipsel qadd" role="group" aria-label="거리 바로 고르기">' + RUN_SPLIT.map(k => '<button type="button" class="cs" data-act="runKmSet" data-arg="' + k + '">' + k + 'km</button>').join('') + '</div>' : '') +
     '<div class="fld"><label>시간 입력 방식</label>' + chipsHtml('tmode', [{ v: 'time', l: '걸린 시간' }, { v: 'pace', l: '페이스' }], 'time') + '</div>' +
     '<div id="timewrap">' + timeFieldsHtml(vals) + '</div>' +
     '<div class="runprev" id="runprev" aria-live="polite">' + esc(runPreviewText({ km: cur ? cur.v : 0, sec: total }, 'time')) + '</div>' +
@@ -3229,6 +3254,9 @@ const ACT = {
   gpick(arg) { NAV.arg = arg; render(); },
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
   logEx(arg) { sheetLogEx(arg); },
+  runDist(arg) { NAV.rdist = arg; render(); },
+  logRunKm(arg) { const e = S.settings.exercises.find(x => x.id === 'run'); if (e) sheetLogRun(e, null, null, todayStr(), Number(arg)); },
+  runKmSet(arg) { const el = byId('f-val'); if (el) { el.value = arg; if (typeof updateRunPreview === 'function') updateRunPreview(); } },
   addTodo() { sheetTodo(); }, editTodo(arg) { sheetTodo(arg); },
   todoTg(arg) {
     const x = S.todos.find(y => y.id === arg), t = dayStr();

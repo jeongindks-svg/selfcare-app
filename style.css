@@ -1124,3 +1124,4 @@ html[data-side] .onecol:has(> .dk){max-width:1080px;margin-inline:auto}
 .qexp{margin:-4px 0 12px;padding:10px 14px;border-radius:12px;background:var(--track2);color:var(--text2);font-size:14px;line-height:1.5;text-align:left}
 .qcnt{margin:4px 0 10px}.qcnt label{font-size:13px;color:var(--sub)}
 .qres.ok b{display:inline-block;margin-top:4px;color:var(--text)}
+.rdseg{margin-bottom:6px}
