@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 82;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 83;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -420,7 +420,7 @@ function runStats(e) {
   const all = timedRuns(e), t = todayStr(), from30 = addDays(t, -29);
   const r30 = all.filter(r => r.d >= from30);
   const fast = all.reduce((b, r) => (!b || r.m / r.v < b.m / b.v) ? r : b, null);
-  const dists = e.id !== 'run' ? [] : RUN_DISTS.map(D => {
+  const dists = !isRunEx(e) ? [] : RUN_DISTS.map(D => {
     const inn = all.filter(r => r.v >= D.d * 0.9 && r.v <= D.d * 1.1).map(r => ({ id: r.id, d: r.d, t: r.m * D.d / r.v }));
     const in30 = inn.filter(r => r.d >= from30);
     const best = inn.length ? inn.reduce((b, r) => r.t < b.t ? r : b) : null;
@@ -439,6 +439,8 @@ function paceBuckets(e, range) {
 function exSummary(e) {
   if (e.minutes) {
     const r = runStats(e);
+    const b3 = r.dists.find(x => x.D.d === 3), b5 = r.dists.find(x => x.D.d === 5);
+    if (b3 && b5 && (b3.best || b5.best)) return '3km ' + (b3.best ? fmtRec(b3.best) : '–') + ' · 5km ' + (b5.best ? fmtRec(b5.best) : '–');
     if (r.pace30 != null) return '평균 페이스 ' + fmtPace(r.pace30) + ' /km' + (r.pbPace ? ' · 최고 ' + fmtPace(r.pbPace) : '');
     const s = exStats(e);
     return s.avgEntry != null ? '1회 평균 ' + exVal(s.avgEntry, e) + ' · 시간도 함께 기록해 보세요' : '아직 기록이 없어요';
@@ -1534,8 +1536,10 @@ function viewRunAll(e) {
 }
 /* 러닝: 전체 / 3km / 5km 기록을 따로 봐요 (거리의 ±10% 안에서 달린 기록을 그 거리로 환산) */
 const RUN_SPLIT = [3, 5];
+/* 거리(km)와 시간을 함께 적는 운동이면 러닝으로 봐요 (기본 '러닝' 말고 직접 만든 종목도) */
+const isRunEx = e => !!(e && e.minutes && /km/i.test(e.unit || 'km'));
 function runDistSeg(e) {
-  if (e.id !== 'run') return '';
+  if (!isRunEx(e)) return '';
   const cur = RUN_SPLIT.indexOf(Number(NAV.rdist)) >= 0 ? String(NAV.rdist) : '';
   return '<div class="seg rangeseg rdseg" role="group" aria-label="거리별 기록">' + [['', '전체'], ['3', '3km'], ['5', '5km']].map(k => '<button type="button" data-act="runDist" data-arg="' + k[0] + '" aria-pressed="' + (cur === k[0]) + '">' + k[1] + '</button>').join('') + '</div>';
 }
@@ -1547,7 +1551,7 @@ function viewRunDist(e, km) {
   h += '<section class="card c-' + e.cls + '"><div class="ml">' + D.label + ' 최고 기록</div><div class="big">' + (best ? fmtRec(best.v) : dash) + '</div>' +
     '<div class="sm">' + (timed.length ? timed.length + '회' + (last ? ' · 최근 ' + fmtRec(last.v) : '') + (in30.length ? ' · 30일 평균 ' + fmtRec(sum(in30.map(r => r.v)) / in30.length) : '') + (best ? ' · 페이스 ' + fmtPace(best.v / km) + ' /km' : '') : '아직 ' + D.label + ' 기록이 없어요') + '</div>' +
     '<div class="pacebox">' + allChart(timed.map(r => ({ d: r.d, v: r.v })), { cls: e.cls, fmt: fmtRec, better: 'low', label: D.label + ' 기록 변화', empty: '시간을 함께 적으면 ' + D.label + ' 기록 그래프가 그려져요.' }) + '</div>' + (timed.length ? '<div class="sm cap">위쪽이 더 빨라요 · ' + (km * 0.9).toFixed(1) + '~' + (km * 1.1).toFixed(1) + 'km 기록을 ' + D.label + '로 환산</div>' : '') + '</section>';
-  h += bigBtn('logRunKm', String(km), e.cls, D.label + ' 기록 추가') + '<!--col-->';
+  h += bigBtn('logRunKm', e.id + '|' + km, e.cls, D.label + ' 기록 추가') + '<!--col-->';
   const list = recs.slice().reverse();
   h += '<section class="group"><div class="gh">' + D.label + ' 기록 <span class="hint">' + recs.length + '회 · 눌러서 수정</span></div>' + (list.length ? list.map(r => {
     const t = r.m > 0 ? r.m * km / r.v : null, isBest = best && best.id === r.id;
@@ -1556,7 +1560,7 @@ function viewRunDist(e, km) {
   return h;
 }
 function viewRun(e) {
-  if (e.id === 'run' && RUN_SPLIT.indexOf(Number(NAV.rdist)) >= 0) return viewRunDist(e, Number(NAV.rdist));
+  if (isRunEx(e) && RUN_SPLIT.indexOf(Number(NAV.rdist)) >= 0) return viewRunDist(e, Number(NAV.rdist));
   if (NAV.exall) return viewRunAll(e);
   const r = NAV.range, rs = runStats(e), items = paceBuckets(e, r);
   const set = [].concat.apply([], bucketDays(r).map(b => b.days));
@@ -2482,7 +2486,7 @@ function sheetLogRun(e, cur, eid, t, preKm) {
   const vals = { tmode: 'time', shown: 'time', min: total ? Math.floor(total / 60) : '', sec: total ? total % 60 : '', pmin: '', psec: '' };
   const body = field('날짜', 'f-date', 'date', cur ? cur.d : t, 'max="' + t + '"') +
     '<div class="fld"><label for="f-val">거리 (' + esc(e.unit) + ')</label><input id="f-val" class="tin" type="text" inputmode="decimal" autocomplete="off" placeholder="예: 5.0" value="' + esc(cur ? cur.v : (preKm || '')) + '" data-inp="runPrev"></div>' +
-    (e.id === 'run' ? '<div class="chipsel qadd" role="group" aria-label="거리 바로 고르기">' + RUN_SPLIT.map(k => '<button type="button" class="cs" data-act="runKmSet" data-arg="' + k + '">' + k + 'km</button>').join('') + '</div>' : '') +
+    (isRunEx(e) ? '<div class="chipsel qadd" role="group" aria-label="거리 바로 고르기">' + RUN_SPLIT.map(k => '<button type="button" class="cs" data-act="runKmSet" data-arg="' + k + '">' + k + 'km</button>').join('') + '</div>' : '') +
     '<div class="fld"><label>시간 입력 방식</label>' + chipsHtml('tmode', [{ v: 'time', l: '걸린 시간' }, { v: 'pace', l: '페이스' }], 'time') + '</div>' +
     '<div id="timewrap">' + timeFieldsHtml(vals) + '</div>' +
     '<div class="runprev" id="runprev" aria-live="polite">' + esc(runPreviewText({ km: cur ? cur.v : 0, sec: total }, 'time')) + '</div>' +
@@ -3255,7 +3259,7 @@ const ACT = {
   week(arg) { NAV.roff = Math.max(0, (NAV.roff || 0) + Number(arg)); render(); },
   logEx(arg) { sheetLogEx(arg); },
   runDist(arg) { NAV.rdist = arg; render(); },
-  logRunKm(arg) { const e = S.settings.exercises.find(x => x.id === 'run'); if (e) sheetLogRun(e, null, null, todayStr(), Number(arg)); },
+  logRunKm(arg) { const p = arg.split('|'), e = S.settings.exercises.find(x => x.id === p[0]); if (e) sheetLogRun(e, null, null, todayStr(), Number(p[1])); },
   runKmSet(arg) { const el = byId('f-val'); if (el) { el.value = arg; if (typeof updateRunPreview === 'function') updateRunPreview(); } },
   addTodo() { sheetTodo(); }, editTodo(arg) { sheetTodo(arg); },
   todoTg(arg) {
