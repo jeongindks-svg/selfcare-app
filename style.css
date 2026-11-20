@@ -1125,3 +1125,18 @@ html[data-side] .onecol:has(> .dk){max-width:1080px;margin-inline:auto}
 .qcnt{margin:4px 0 10px}.qcnt label{font-size:13px;color:var(--sub)}
 .qres.ok b{display:inline-block;margin-top:4px;color:var(--text)}
 .rdseg{margin-bottom:6px}
+
+/* v85: 업무 문제 그림 */
+.qfig{margin:0 0 14px;padding:10px 8px;border-radius:14px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line);color:var(--text2)}
+.qfig svg{display:block;width:100%;height:auto;max-height:230px}
+.qfig .l{fill:none;stroke:var(--text2);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.qfig .mk{fill:var(--text2)}
+.qfig .w3{stroke-width:3}.qfig .w5{stroke-width:5}
+.qfig .b{stroke:#2F7FEA}.qfig .r{stroke:#E5484D}.qfig .g{stroke:#2FA866}.qfig .o{stroke:#E08A2E}.qfig .or{stroke:#F26A21}
+.qfig .fb{fill:#2F7FEA}.qfig .fo{fill:#E08A2E}.qfig .fo2{fill:rgba(224,138,46,.25)}.qfig .fbl{fill:rgba(47,127,234,.18)}.qfig .fr2{fill:rgba(229,72,77,.25)}
+.qfig .fs{fill:var(--track2)}.qfig .fw{fill:var(--card)}.qfig .fd{fill:var(--text2)}
+.qfig .dim{opacity:.3}
+.qfig text{fill:var(--text);font-size:12px;font-family:inherit}
+.qfig text.s{fill:var(--sub);font-size:11px}
+.qfig text.bt{fill:#2F7FEA}.qfig text.ot{fill:#C46F14}.qfig text.rt{fill:#E5484D}
+.qfig text.b6{font-weight:700}

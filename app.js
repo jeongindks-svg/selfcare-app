@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 84;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 85;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1972,6 +1972,108 @@ function viewDeck() {
     (d.cards.length ? '<div class="wkl">' + d.cards.map(c => { const x = wkRec(c.id); return '<button type="button" class="wkr" data-act="editWkCard" data-arg="' + d.id + '|' + c.id + '"><span class="wq">' + esc(c.q) + '</span><span class="wa">' + esc(c.a) + '</span><span class="wm' + (x.last === 'ng' ? ' ng' : x.last === 'ok' ? ' ok' : '') + '">' + (x.last === 'ng' ? '✕' : x.last === 'ok' ? '✓' : '') + '</span></button>'; }).join('') + '</div>' : '<div class="emptyrow">문제를 추가해 보세요</div>') + '</section>';
   return h;
 }
+/* ---------- 업무 문제 그림: 정답 확인 뒤 해설과 함께 보여 주는 간단한 그림 (인터넷 없이도 보여요) ---------- */
+const FT = (x, y, s, c, a) => '<text x="' + x + '" y="' + y + '"' + (c ? ' class="' + c + '"' : '') + ' text-anchor="' + (a || 'middle') + '">' + s + '</text>';
+const FR = (x, y, w, h, c, r) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + (r == null ? 3 : r) + '" class="' + c + '"/>';
+const FP = (d, c, arrow) => '<path d="' + d + '" class="l ' + (c || '') + '"' + (arrow ? ' marker-end="url(#fa)"' : '') + '/>';
+const FB = (x, y, w, h, s) => FR(x, y, w, h, 'l fw', 6) + FT(x + w / 2, y + h / 2 + 4, s);
+const FX = (x, y) => FP('M' + (x - 9) + ' ' + (y - 9) + 'L' + (x + 9) + ' ' + (y + 9) + 'M' + (x + 9) + ' ' + (y - 9) + 'L' + (x - 9) + ' ' + (y + 9), 'r w3');
+const FOK = (x, y) => FP('M' + (x - 9) + ' ' + y + 'l6 7l12 -14', 'g w3');
+const FDEF = '<defs><marker id="fa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk"/></marker></defs>';
+const fsvg = inner => '<svg viewBox="0 0 300 140" role="img" aria-hidden="true">' + FDEF + inner + '</svg>';
+function figPair(t1, t2, hl) {
+  return FB(8, 40, 56, 54, '실내기') + FB(236, 40, 56, 54, '실외기') +
+    FR(64, 54, 172, 6, 'fb' + (hl === 2 ? ' dim' : '')) + FR(64, 72, 172, 14, 'fo' + (hl === 1 ? ' dim' : '')) +
+    FT(150, 46, t1, 'bt') + FT(150, 104, t2, 'ot');
+}
+function figStages(hl) {
+  const st = [[0.3, '3분'], [1.5, '3분'], [4.0, '24시간']], Y = p => 120 - p * 24;
+  let d = 'M30 120', x = 30, h = FP('M30 122H290M30 122V12', '', false) + FT(26, 16, 'MPa', 's', 'end');
+  st.forEach((s, k) => { const nx = x + (k === 2 ? 120 : 60); d += 'L' + x + ' ' + Y(s[0]) + 'L' + nx + ' ' + Y(s[0]); h += FT((x + nx) / 2, Y(s[0]) - 6, s[0] + ' MPa · ' + s[1], k + 1 === hl ? 'bt b6' : 's'); x = nx; });
+  return h + FP(d, 'b w3') + FT(160, 136, '1단계 → 2단계 → 3단계 (큰 누설부터 단계적으로)', 's');
+}
+function figDecay(hl) {
+  return FP('M30 120H290M30 120V14', '') + FT(36, 12, '진공도', 's', 'start') + FT(290, 134, '시간 →', 's', 'end') +
+    FP('M30 112C90 100 160 60 280 20', 'r w3' + (hl === 2 ? ' dim' : '')) + FT(250, 18, '계속 오름 = 누설', 'rt' + (hl === 1 ? ' b6' : '')) +
+    FP('M30 112C80 90 120 70 280 70', 'b w3' + (hl === 1 ? ' dim' : '')) + FT(250, 88, '오르다 멈춤 = 수분', 'bt' + (hl === 2 ? ' b6' : '')) +
+    FT(120, 134, '펌프를 멈춘 뒤', 's');
+}
+function figTorque(hl) {
+  const flare = x => FR(x, 66, 50, 10, 'fo', 2) + FP('M' + (x + 50) + ' 66L' + (x + 64) + ' 58V84L' + (x + 50) + ' 76', 'o') + FR(x + 52, 54, 22, 34, 'l fs', 3);
+  return FT(75, 22, '부족', hl === 1 ? 'rt b6' : 's') + flare(30) + '<circle cx="110" cy="96" r="4" class="fb"/><circle cx="118" cy="108" r="3" class="fb"/>' + FT(75, 126, '틈새로 누설', 's') +
+    FT(225, 22, '과다', hl === 2 ? 'rt b6' : 's') + flare(180) + FP('M240 60l6 8l-5 6l7 9', 'r w3') + FT(225, 126, '나팔부 갈라짐(크랙)', 's') +
+    FT(150, 46, '토크렌치로', 's');
+}
+function figAddr(err) {
+  const n = err ? ['1', '2', '2'] : ['1', '2', '3'];
+  let h = FB(230, 44, 60, 44, '실외기') + FP('M30 30H260V44', 'b');
+  n.forEach((s, k) => { const x = 14 + k * 70; h += FR(x, 14, 52, 32, 'l fw', 6) + FT(x + 26, 34, '실내기 ' + s, err && s === '2' ? 'rt b6' : ''); });
+  return h + (err ? FT(110, 90, '번호가 겹치면 → 통신 에러', 'rt b6') + FX(110, 112) : FT(110, 90, '실내기마다 번호(어드레스)', 'bt b6') + FOK(110, 110));
+}
+const FIGS = {
+  pair1: () => fsvg(figPair('액관 = 가는 관 (리퀴드)', '가스관 = 굵은 관 (석션)', 1)),
+  pair2: () => fsvg(figPair('액관 = 가는 관', '가스관 = 굵은 관 · 냉방 때 차가워 결로', 2)),
+  dia: () => fsvg('<circle cx="70" cy="66" r="44" class="l fo2"/><circle cx="70" cy="66" r="38" class="l fw"/>' + FP('M26 66H114', '', true) + FP('M114 66H26', '', true) + FT(70, 60, '외경', 's') + FT(70, 126, '9.52 mm = 3/8"', 'b6') +
+    FT(210, 34, '1인치를 8부로 나눈 호칭', 's') + FT(210, 58, '1/4" = 이부 (6.35)') + FT(210, 78, '3/8" = 삼부 (9.52)', 'bt b6') + FT(210, 98, '1/2" = 사부 (12.7)') + FT(210, 118, '5/8" = 오부 (15.88)')),
+  cutter: () => fsvg(FR(14, 70, 120, 14, 'fo') + FP('M40 40l50 24', 'w3') + FP('M38 36h-14v12h14', '') + '<circle cx="104" cy="92" r="2" class="fd"/><circle cx="112" cy="88" r="2" class="fd"/><circle cx="124" cy="80" r="2" class="fd"/>' + FT(74, 122, '쇠톱: 쇳가루가 관 속으로', 's') + FX(74, 24) +
+    FR(166, 70, 120, 14, 'fo') + '<circle cx="226" cy="77" r="22" class="l"/><circle cx="226" cy="53" r="6" class="l fs"/>' + FP('M226 99v24', 'w3') + FT(226, 132, '파이프 커터: 깨끗·직각', 's') + FOK(226, 24)),
+  cap: () => fsvg(FR(20, 64, 110, 16, 'fo') + '<circle cx="138" cy="60" r="2" class="fd"/><circle cx="146" cy="70" r="2" class="fd"/><circle cx="140" cy="84" r="2" class="fd"/>' + FP('M150 50l-12 10', 'b', true) + FT(75, 108, '열어 두면 먼지·수분 유입', 's') + FX(75, 30) +
+    FR(170, 64, 100, 16, 'fo') + FR(268, 60, 14, 24, 'fb', 4) + FT(225, 108, '캡·테이프로 막기', 's') + FOK(225, 30)),
+  flare: () => fsvg(FR(20, 64, 120, 14, 'fo', 2) + FP('M140 64L168 50V92L140 78', 'o w3') + '<path d="M156 40h44l10 31l-10 31h-44l-10-31z" class="l fs"/>' + FR(210, 64, 70, 14, 'fo', 2) +
+    FT(80, 54, '나팔 모양(플레어)', 's') + FT(178, 126, '너트로 조여 이음 = 플레어 이음 (후레아)', 'b6') + FT(178, 30, '누설이 가장 많은 곳', 'rt')),
+  nutfirst: () => fsvg(FT(70, 22, '① 너트 먼저 끼우기', 'bt b6') + FR(14, 64, 130, 14, 'fo', 2) + '<path d="M60 52h28l7 19l-7 19h-28l-7-19z" class="l fs"/>' + FP('M100 40H70', 'b', true) +
+    FT(220, 22, '② 나팔 내기', 'b6') + FR(166, 64, 90, 14, 'fo', 2) + FP('M256 64L280 52V90L256 78', 'o w3') + FT(150, 126, '순서를 바꾸면 잘라 내고 다시', 's')),
+  reamer: () => fsvg(FR(130, 10, 18, 80, 'fo', 2) + FP('M139 98l-10 20h20z', 'w3') + FP('M139 118v18', 'w3') + '<circle cx="122" cy="104" r="2" class="fd"/><circle cx="158" cy="110" r="2" class="fd"/><circle cx="150" cy="124" r="2" class="fd"/>' +
+    FP('M190 70v40', 'b', true) + FT(236, 64, '관 입구를 아래로', 'bt b6') + FT(236, 84, '부스러기가 밖으로', 's') + FT(60, 60, '리머(버 제거)', 's')),
+  torque1: () => fsvg(figTorque(1)), torque2: () => fsvg(figTorque(2)),
+  n2: () => fsvg(FR(14, 30, 34, 90, 'l fs', 10) + FT(31, 80, 'N₂') + FP('M48 50C80 50 80 72 100 72', 'b') + FR(100, 64, 180, 16, 'fo', 2) + FP('M170 64l6 -18l6 18', 'or w3') + FT(176, 36, '용접', 's') +
+    FP('M110 72H270', 'b', true) + FT(190, 104, '관 속에 질소를 흘리며 용접', 'bt b6') + FT(190, 124, '→ 안쪽 산화 스케일(검은 가루) 방지', 's')),
+  nogas: () => fsvg(['산소', '압축공기', 'LPG'].map((g, k) => FR(14 + k * 70, 30, 58, 58, 'l fw', 10) + FT(43 + k * 70, 64, g) + FX(43 + k * 70, 108)).join('') + FR(226, 30, 58, 58, 'l fbl', 10) + FT(255, 64, '질소', 'bt b6') + FOK(255, 108)),
+  oxy: () => fsvg(FT(60, 70, '냉동기유', 'b6') + FT(150, 72, '+') + FT(220, 70, '산소', 'rt b6') + FP('M150 76l8 12l14 -4l-6 13l12 9l-15 2l-2 14l-9 -11l-10 9l1 -14l-14 -4l12 -8l-6 -13l14 5z', 'r fr2') + FT(150, 30, '만나면 폭발 위험', 'rt b6')),
+  bcup: () => fsvg(FR(14, 50, 120, 16, 'fo', 2) + FR(120, 46, 70, 24, 'l fo2', 4) + FR(176, 50, 110, 16, 'fo', 2) + FP('M150 46L170 10', 'o w3') + FT(214, 18, '인동납 (BCuP)', 'b6') +
+    FT(150, 98, '동관 + 동관 → 인동납 (플럭스 없이)', '') + FT(150, 122, '다른 금속끼리는 은납(BAg) + 플럭스', 's')),
+  wetcloth: () => fsvg(FR(60, 40, 70, 60, 'l fs', 8) + FT(95, 74, '밸브') + FP('M52 40c8 8 0 16 8 24c8 8 0 16 8 24M138 40c-8 8 0 16 -8 24c-8 8 0 16 -8 24', 'b w3') +
+    FR(130, 64, 140, 14, 'fo', 2) + FP('M220 64l6 -16l6 16', 'or w3') + FT(95, 124, '젖은 천으로 감싸 열 식히기', 'bt b6')),
+  st1: () => fsvg(figStages(1)), st2: () => fsvg(figStages(2)), st3: () => fsvg(figStages(3)),
+  temp: () => fsvg(FR(40, 20, 18, 84, 'l fw', 9) + '<circle cx="49" cy="110" r="14" class="l fr2"/>' + FR(45, 60, 8, 50, 'fr2', 3) + FT(170, 62, '1°C 바뀌면', '') + FT(170, 88, '약 0.01 MPa 변화', 'bt b6') + FT(170, 118, '가압 때와 확인 때 온도를 같이 기록', 's')),
+  svc: () => fsvg(FB(200, 30, 86, 70, '실외기') + '<circle cx="196" cy="56" r="9" class="l fs"/>' + FX(196, 56) + FR(14, 50, 174, 12, 'fo', 2) + FT(100, 40, '현장 배관만 시험 (질소 가압)', 's') + FT(150, 124, '서비스 밸브는 닫아 둔다 — 실외기엔 이미 냉매', 'b6')),
+  soap: () => fsvg(FR(14, 60, 110, 16, 'fo', 2) + '<path d="M120 48h34l8 20l-8 20h-34l-8-20z" class="l fs"/>' + FR(158, 60, 128, 16, 'fo', 2) +
+    [[166, 50, 7], [178, 40, 5], [160, 36, 4], [186, 54, 4]].map(b => '<circle cx="' + b[0] + '" cy="' + b[1] + '" r="' + b[2] + '" class="l b fbl"/>').join('') + FT(150, 118, '접속부에 비눗물 → 거품 나면 새는 곳', 'bt b6')),
+  micron: () => fsvg('<circle cx="80" cy="74" r="50" class="l fw"/>' + FP('M80 74L60 40', 'r w3') + FT(80, 106, 'micron', 's') + FT(210, 60, '목표', 's') + FT(210, 88, '500 micron 이하', 'bt b6') + FT(210, 110, '(약 67 Pa)', 's')),
+  mgauge: () => fsvg('<circle cx="70" cy="62" r="40" class="l fw"/>' + FP('M70 62l24 -16', 'w3') + FT(70, 118, '매니폴드 −76 cmHg', 's') + FX(70, 20) +
+    FR(170, 26, 100, 70, 'l fw', 10) + FT(220, 66, '480 μ', 'bt b6') + FT(220, 118, '마이크론(진공) 게이지', 's') + FOK(220, 14)),
+  dec1: () => fsvg(figDecay(1)), dec2: () => fsvg(figDecay(2)),
+  order: () => fsvg(FT(80, 30, '① 밸브 닫기', 'bt b6') + FT(220, 30, '② 펌프 끄기', 'bt b6') + FP('M130 26H170', 'b', true) + FB(30, 56, 100, 40, '배관') + FB(170, 56, 100, 40, '진공 펌프') +
+    FT(150, 122, '반대로 하면 펌프 오일이 배관으로 역류', 'rt')),
+  charge: () => fsvg(FR(14, 50, 272, 8, 'fb', 2) + FR(14, 70, 272, 16, 'fo', 2) + FP('M14 30H286', 'b', true) + FP('M286 30H14', 'b', true) + FT(150, 24, '액관 길이 L', 'bt b6') + FT(150, 112, '추가 냉매량은 액관 길이로 계산', 'b6') + FT(150, 130, '저울로 계량 · 명판에 기록', 's')),
+  liquid: () => fsvg(FR(40, 20, 50, 96, 'l fs', 14) + FR(44, 70, 42, 42, 'fbl', 10) + FT(65, 60, 'R410A') + FP('M90 90C130 90 140 70 180 70', 'b', true) + FB(184, 50, 100, 40, '배관 (액관)') + FT(150, 132, '액체 상태로 충전', 'bt b6')),
+  refnet: () => fsvg(FR(14, 64, 110, 14, 'fo', 2) + FP('M124 71C170 71 170 40 210 40H286M124 71C170 71 170 102 210 102H286', 'o w5') + FT(70, 54, '분기관', 's') + FT(220, 70, 'REFNET (상표명)', 'b6') + FT(150, 132, '문서에는 "냉매 분기관"', 's')),
+  branchsel: () => fsvg(FP('M20 70H120M120 70C160 70 160 30 200 30M120 70H200M120 70C160 70 160 110 200 110', 'o w3') + ['2.2', '3.6', '2.8'].map((v, k) => FB(204, 14 + k * 40, 80, 32, v + 'kW')).join('') + FT(60, 56, '분기관', 's') + FT(70, 104, '= 뒤쪽 실내기 합계', 'bt b6') + FT(70, 124, '로 모델 선택', 's')),
+  elbow: () => fsvg(FP('M20 20V80Q20 100 40 100H200', 'o w5') + FP('M200 100C230 100 240 70 280 70M200 100C230 100 240 130 280 130', 'o w3') + FP('M40 116H196', 'b', true) + FP('M196 116H40', 'b', true) + FT(118, 136, '직관 0.5 m 이상', 'bt b6') + FT(150, 40, '엘보 바로 뒤 분기 ✕ — 냉매가 한쪽으로 쏠림', 'rt')),
+  insul: () => fsvg('<circle cx="80" cy="70" r="48" class="l fs"/><circle cx="80" cy="70" r="20" class="l fo2"/>' + FT(80, 74, '동관', 's') + FT(210, 60, '고무발포 보온재', 'b6') + FT(210, 84, '(현장: 아마플렉스)', 's')),
+  sep: () => fsvg('<circle cx="50" cy="60" r="24" class="l fs"/><circle cx="50" cy="60" r="7" class="fb"/><circle cx="110" cy="60" r="28" class="l fs"/><circle cx="110" cy="60" r="11" class="fo"/>' + FOK(80, 114) + FT(80, 134, '따로 보온', 's') +
+    '<ellipse cx="220" cy="60" rx="56" ry="34" class="l fs"/><circle cx="200" cy="60" r="7" class="fb"/><circle cx="238" cy="60" r="11" class="fo"/>' + FP('M210 60h14', 'r', true) + FX(220, 114) + FT(220, 134, '함께 넣으면 열을 주고받음', 's')),
+  saddle: () => fsvg(FR(20, 60, 110, 26, 'l fs', 13) + FP('M40 40v20M110 40v20M40 60Q75 76 110 60', 'w3') + FX(75, 112) + FT(75, 134, '밴드가 눌러 결로', 's') +
+    FR(170, 60, 110, 26, 'l fs', 13) + FR(180, 54, 90, 10, 'fb', 3) + FP('M190 34v20M260 34v20', 'w3') + FOK(225, 112) + FT(225, 134, '보온 받침(새들)', 's')),
+  lift: () => fsvg(FB(20, 90, 110, 36, '실내기 (펌프)') + FP('M120 90V20H260', 'b w3') + FP('M150 88V24', '', true) + FP('M150 24V88', '', true) + FT(176, 60, '양정', 'bt b6') + FT(230, 112, '펌프가 끌어올리는 높이', 's')),
+  drainup: () => fsvg(FB(14, 90, 60, 36, '실내기') + FP('M60 90V30L140 40', 'b w3') + FOK(100, 18) + FT(100, 64, '한 번 올리고 내림 구배', 's') +
+    FB(166, 90, 60, 36, '실내기') + FP('M212 90V60H250V24H286', 'r w3') + FX(250, 112) + FT(232, 136, '다시 올리면 물이 역류', 's')),
+  trap: () => fsvg(FB(14, 20, 120, 50, '덕트형 실내기') + FT(74, 88, '송풍기가 빨아들임(음압)', 's') + FP('M120 70V100Q120 120 140 120H160Q180 120 180 100V90H270', 'b w5') + FT(232, 78, '트랩(봉수)', 'bt b6') + FT(232, 136, '물이 잘 빠지고 냄새도 막음', 's')),
+  water: () => fsvg(FR(40, 90, 160, 24, 'l fs', 6) + FR(46, 98, 148, 12, 'fbl', 4) + FP('M190 20l-30 30', 'w3') + FR(186, 10, 40, 24, 'l fw', 6) + '<circle cx="150" cy="70" r="3" class="fb"/><circle cx="146" cy="82" r="3" class="fb"/>' + FP('M200 102H280', 'b', true) + FT(150, 136, '드레인팬에 물 → 배수·누수 확인 = 통수 시험', 'bt b6')),
+  addr: () => fsvg(figAddr(false)), addrErr: () => fsvg(figAddr(true)),
+  s_ceil: () => fsvg(FP('M20 40H280', 'w5') + FP('M40 40V30M100 40V30M160 40V30M220 40V30M270 40V30', '') + FR(120, 44, 60, 16, 'l fs', 4) + FT(150, 90, '덴조 → 천장', 'b6') + FT(150, 112, '천장 공사 · 천장 속', 's')),
+  s_wire: () => fsvg(FR(30, 60, 240, 14, 'fo', 2) + FR(30, 80, 240, 10, 'fb', 2) + FP('M90 54c10 0 10 42 0 42c-10 0 -10 -42 0 -42M200 54c10 0 10 42 0 42c-10 0 -10 -42 0 -42', 'w3') + FT(150, 126, '반생 → 결속선 (묶는 철사)', 'b6')),
+  s_end: () => fsvg(FP('M120 20V120', 'w3') + FR(122, 20, 60, 40, 'l fs', 2) + FR(122, 20, 15, 10, 'fd', 0) + FR(152, 20, 15, 10, 'fd', 0) + FR(137, 30, 15, 10, 'fd', 0) + FR(167, 30, 15, 10, 'fd', 0) + FR(122, 40, 15, 10, 'fd', 0) + FR(152, 40, 15, 10, 'fd', 0) + FR(137, 50, 15, 10, 'fd', 0) + FR(167, 50, 15, 10, 'fd', 0) + FT(220, 100, '시마이 → 마무리', 'b6')),
+  s_chip: () => fsvg(FR(20, 90, 260, 36, 'l fs', 2) + FP('M120 90l10 -10l8 6l10 -12', 'r w3') + FR(150, 20, 50, 18, 'l fw', 4) + FP('M175 38V80', 'w5') + FT(150, 66, '', 's') + FT(240, 60, '히스리 →', 's') + FT(240, 80, '콘크리트 깨기 (치핑)', 'b6')),
+  s_prep: () => fsvg(FR(30, 14, 90, 116, 'l fw', 8) + [36, 66, 96].map(y => FOK(50, y) + FP('M66 ' + y + 'H108', '')).join('') + FT(210, 70, '단도리 →', 's') + FT(210, 94, '사전 준비', 'b6')),
+  s_help: () => fsvg('<circle cx="80" cy="40" r="16" class="l fw"/>' + FP('M80 56V100M80 70L56 90M80 70L104 90M80 100L62 130M80 100L98 130', 'w3') + '<circle cx="150" cy="56" r="12" class="l fbl"/>' + FP('M150 68V104M150 80L132 96M150 80L168 96M150 104L136 130M150 104L164 130', 'b w3') +
+    FT(240, 70, '데모도 →', 's') + FT(240, 94, '조공 (보조 작업자)', 'b6'))
+};
+const CARD_FIG = { field0: 'pair1', field1: 'pair2', field2: 'dia', field3: 'dia', field4: 'cutter', field5: 'cap', field6: 'flare', field7: 'nutfirst', field8: 'reamer', field9: 'torque1', field10: 'torque2',
+  field11: 'n2', field12: 'nogas', field13: 'oxy', field14: 'bcup', field15: 'wetcloth', field16: 'st1', field17: 'st2', field18: 'st3', field19: 'temp', field20: 'svc', field21: 'soap', field22: 'micron', field23: 'mgauge',
+  field24: 'dec1', field25: 'dec2', field26: 'order', field27: 'charge', field28: 'liquid', field29: 'refnet', field30: 'branchsel', field31: 'elbow', field32: 'elbow', field33: 'insul', field34: 'sep', field35: 'saddle',
+  field36: 'lift', field37: 'drainup', field38: 'trap', field39: 'water', field40: 'addr', field41: 'addrErr', slang0: 's_ceil', slang1: 's_wire', slang2: 's_end', slang3: 's_chip', slang4: 's_prep', slang5: 's_help' };
+const cardFig = c => { const k = c && CARD_FIG[c.id], f = k && FIGS[k]; return f ? '<figure class="qfig">' + f() + '</figure>' : ''; };
 /* 문제 하나는 '문제집id|문제id' 로 가리켜요 (전체 풀기에서 여러 문제집을 섞기 위해) */
 const qFind = key => { const p = String(key).split('|'), d = S.work.decks.find(x => x.id === p[0]), c = d && d.cards.find(x => x.id === p[1]); return c ? { d: d, c: c } : null; };
 const qAns = (Q, f) => Q.dir === 'qa' ? f.c.a : f.c.q;
@@ -2003,7 +2105,7 @@ function viewQuiz() {
   else if (Q.mode === 'short') h += '<div class="fld"><input id="qa-in" class="tin qin" type="text" autocomplete="off" autocapitalize="off" inputmode="text" enterkeyhint="done" placeholder="답을 입력"' + (done ? ' disabled value="' + esc(Q.text || '') + '"' : '') + '></div>' + (done ? '' : '<button type="button" class="btn full c-sleep" data-act="quizSubmit">확인</button>');
   else if (!done) h += '<button type="button" class="btn full ghost" data-act="quizFlip">정답 보기</button>';
   if (done) {
-    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요<br><b>' + esc(ans) + '</b>' : '정답: <b>' + esc(ans) + '</b>') + '</div>' + (c.x ? '<div class="qexp">' + esc(c.x) + '</div>' : '');
+    h += '<div class="qres ' + (Q.ok1 ? 'ok' : 'ng') + '">' + (Q.ok1 ? '정답이에요<br><b>' + esc(ans) + '</b>' : '정답: <b>' + esc(ans) + '</b>') + '</div>' + (c.x ? '<div class="qexp">' + esc(c.x) + '</div>' : '') + cardFig(c);
     h += Q.mode === 'card' ? '<div class="btnpair"><button type="button" class="btn ghost" data-act="quizGrade" data-arg="0">몰랐어요</button><button type="button" class="btn c-sleep" data-act="quizGrade" data-arg="1">알았어요</button></div>' : '<button type="button" class="btn full c-sleep" data-act="quizNext">' + (Q.i + 1 >= Q.ids.length ? '결과 보기' : '다음') + '</button>';
   }
   return h;
