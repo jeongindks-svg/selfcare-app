@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 87;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 88;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1946,8 +1946,30 @@ const qCountHtml = total => { const n = S.work.qn || 0, opts = [0, 10, 20, 30].f
   return '<div class="fld qcnt"><label>문제 수 (랜덤)</label><div class="chipsel" role="group">' + opts.map(v => '<button type="button" class="cs' + (n === v ? ' on' : '') + '" data-act="quizCount" data-arg="' + v + '" aria-pressed="' + (n === v) + '">' + (v ? v + '문제' : '전부 (' + total + ')') + '</button>').join('') +
     '<button type="button" class="cs' + (custom ? ' on' : '') + '" data-act="quizCount" data-arg="custom">' + (custom ? n + '문제' : '직접 입력') + '</button></div></div>'; };
 /* 업무 문제 내보내기: 다른 앱(엑셀·Anki·Quizlet 등)에 옮기기 좋은 형식으로 */
-const WK_FMT = { csv: ['엑셀 (CSV)', '.csv', 'text/csv'], anki: ['Anki', '-Anki.txt', 'text/plain'], quizlet: ['Quizlet · 탭 구분', '-Quizlet.txt', 'text/plain'], text: ['읽기용 텍스트', '.txt', 'text/plain'], json: ['JSON', '.json', 'application/json'] };
+const WK_FMT = { html: ['한 파일로 (그림 포함 · HTML)', '.html', 'text/html'], csv: ['엑셀 (CSV)', '.csv', 'text/csv'], anki: ['Anki', '-Anki.txt', 'text/plain'], quizlet: ['Quizlet · 탭 구분', '-Quizlet.txt', 'text/plain'], text: ['읽기용 텍스트', '.txt', 'text/plain'], json: ['JSON', '.json', 'application/json'] };
+const WK_FIG_CSS = '.qfig{margin:0 0 14px;padding:10px 8px;border-radius:14px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line);color:var(--text2)} .qfig svg{display:block;width:100%;height:auto;max-height:230px} .qfig .l{fill:none;stroke:var(--text2);stroke-width:2;stroke-linecap:round;stroke-linejoin:round} .qfig .mk{fill:var(--text2)} .qfig .w3{stroke-width:3}.qfig .w5{stroke-width:5} .qfig .b{stroke:#2F7FEA}.qfig .r{stroke:#E5484D}.qfig .g{stroke:#2FA866}.qfig .o{stroke:#E08A2E}.qfig .or{stroke:#F26A21} .qfig .fb{fill:#2F7FEA}.qfig .fo{fill:#E08A2E}.qfig .fo2{fill:rgba(224,138,46,.25)}.qfig .fbl{fill:rgba(47,127,234,.18)}.qfig .fr2{fill:rgba(229,72,77,.25)} .qfig .fs{fill:var(--track2)}.qfig .fw{fill:var(--card)}.qfig .fd{fill:var(--text2)} .qfig .dim{opacity:.3} .qfig text{fill:var(--text);font-size:12px;font-family:inherit} .qfig text.s{fill:var(--sub);font-size:11px} .qfig text.bt{fill:#2F7FEA}.qfig text.ot{fill:#C46F14}.qfig text.rt{fill:#E5484D} .qfig text.b6{font-weight:700}';
+/* 한 파일로: 모든 문제집 · 문제 · 정답 · 해설 · 그림을 담은 HTML (브라우저에서 열거나 PDF로 인쇄) */
+function workExportHTML(ds) {
+  const n = ds.reduce((t, d) => t + d.cards.length, 0);
+  const head = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>업무 문제 모음</title><style>' +
+    ':root{--text:#1c1c1e;--text2:#3a3a3c;--sub:#6e6e73;--line:#e5e5ea;--track2:#f2f2f7;--card:#fff}' +
+    'body{margin:0;background:#f2f2f7;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;line-height:1.5}' +
+    '.wrap{max-width:820px;margin:0 auto;padding:24px 16px 48px}h1{font-size:26px;margin:0 0 4px}.meta{color:var(--sub);font-size:14px;margin-bottom:18px}' +
+    '.toc{background:#fff;border-radius:14px;padding:12px 16px;margin-bottom:22px}.toc a{display:block;color:#2F7FEA;text-decoration:none;padding:3px 0}' +
+    'h2{font-size:20px;margin:28px 0 10px;padding-top:6px;border-top:3px solid #2F7FEA}h2 small{color:var(--sub);font-weight:500;font-size:14px}' +
+    '.card{background:#fff;border-radius:14px;padding:14px 16px;margin:10px 0;break-inside:avoid;page-break-inside:avoid}' +
+    '.q{font-weight:700;font-size:16px}.q b{color:#2F7FEA;margin-right:6px}.a{margin-top:6px;font-size:16px}.a span{display:inline-block;background:#e8f1fd;color:#1a5fb4;border-radius:6px;padding:1px 8px;font-weight:700}' +
+    '.x{margin-top:8px;color:var(--text2);font-size:14px;background:var(--track2);border-radius:10px;padding:8px 12px}' + WK_FIG_CSS + '.card .qfig{margin:10px 0 0;max-width:440px;padding:6px}.card .qfig svg{max-height:190px}.card.cf{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:center}.card.cf .qfig{margin:0}@media (max-width:640px){.card.cf{display:block}.card.cf .qfig{margin-top:10px}}' +
+    '.tb{width:100%;border-collapse:collapse;background:#fff}.tb tr{break-inside:avoid}h2{break-after:avoid;page-break-after:avoid}.tb th,.tb td{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:15px}.tb th{background:var(--track2);color:var(--sub);font-size:13px}.tb td:first-child,.tb th:first-child{width:36px;color:var(--sub)}.tb b{color:#1a5fb4}' + '@media print{body{background:#fff}.card{border:1px solid #ddd}.toc{display:none}}</style></head><body><div class="wrap">';
+  const toc = '<div class="toc">' + ds.map((d, k) => '<a href="#d' + k + '">' + esc(d.name) + ' · ' + d.cards.length + '문제</a>').join('') + '</div>';
+  const body = ds.map((d, k) => '<h2 id="d' + k + '">' + esc(d.name) + ' <small>' + d.cards.length + '문제 · ' + esc(d.ql) + ' → ' + esc(d.al) + '</small></h2>' +
+    (d.cards.some(c => c.x || cardFig(c)) ? d.cards.map((c, i) =>
+      { const fg = cardFig(c); return '<div class="card' + (fg ? ' cf' : '') + '"><div class="tx"><div class="q"><b>Q' + (i + 1) + '</b>' + esc(c.q) + '</div><div class="a">정답 <span>' + esc(c.a) + '</span></div>' + (c.x ? '<div class="x">' + esc(c.x) + '</div>' : '') + '</div>' + fg + '</div>'; }).join('')
+      : '<table class="tb"><tr><th>#</th><th>' + esc(d.ql) + '</th><th>' + esc(d.al) + '</th></tr>' + d.cards.map((c, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(c.q) + '</td><td><b>' + esc(c.a) + '</b></td></tr>').join('') + '</table>')).join('');
+  return head + '<h1>업무 문제 모음</h1><div class="meta">' + ds.length + '개 문제집 · ' + n + '문제 · ' + todayStr() + ' 내보냄</div>' + toc + body + '</div></body></html>';
+}
 function workExport(fmt, decks) {
+  if (fmt === 'html') return workExportHTML(decks || S.work.decks.filter(wkOn));
   const ds = decks || S.work.decks.filter(wkOn), one = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
   const csvq = v => '"' + one(v).replace(/"/g, '""') + '"';
   if (fmt === 'json') return JSON.stringify({ app: '자기관리 업무 문제', exported: todayStr(), decks: ds.map(d => ({ name: d.name, question_label: d.ql, answer_label: d.al, cards: d.cards.map(c => Object.assign({ question: c.q, answer: c.a }, c.x ? { explanation: c.x } : {})) })) }, null, 2);
@@ -1960,7 +1982,7 @@ function sheetWkExport() {
   const ds = S.work.decks.filter(wkOn), n = ds.reduce((t, d) => t + d.cards.length, 0);
   const body = '<p class="cmsg">체크한 문제집 ' + ds.length + '개 · ' + n + '문제를 내보내요.</p>' +
     Object.keys(WK_FMT).map(k => '<div class="xprow"><button type="button" class="btn ghost" data-act="wkExport" data-arg="' + k + '|save">' + WK_FMT[k][0] + ' 파일 저장</button><button type="button" class="btn ghost xpcopy" data-act="wkExport" data-arg="' + k + '|copy" aria-label="' + WK_FMT[k][0] + ' 복사">복사</button></div>').join('') +
-    '<p class="fhint">엑셀(CSV): 엑셀·구글 시트에서 열기 · Anki: 파일 → 가져오기 · Quizlet: 세트 만들기 → 가져오기에 붙여넣기(탭/줄바꿈) · 읽기용: 메모·카톡에 붙여넣기</p>';
+    '<p class="fhint">한 파일로: 그림까지 모두 담긴 문서 — 브라우저에서 열어 보거나 \'인쇄 → PDF로 저장\' · 엑셀(CSV): 엑셀·구글 시트에서 열기 · Anki: 파일 → 가져오기 · Quizlet: 세트 만들기 → 가져오기에 붙여넣기(탭/줄바꿈) · 읽기용: 메모·카톡에 붙여넣기</p>';
   openSheet('업무 문제 내보내기', body, null, { cancel: '닫기', save: '\u00a0' });
 }
 const wkOn = d => !(S.work.off || []).includes(d.id);   // 전체 풀기에 넣을 문제집 (기본은 모두)
