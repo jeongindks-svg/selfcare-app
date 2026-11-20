@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 86;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 87;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -1945,6 +1945,24 @@ const wkRate = d => { const r = d.cards.map(c => wkRec(c.id)), ok = sum(r.map(x 
 const qCountHtml = total => { const n = S.work.qn || 0, opts = [0, 10, 20, 30].filter(v => v === 0 || v < total); const custom = n && opts.indexOf(n) < 0;
   return '<div class="fld qcnt"><label>문제 수 (랜덤)</label><div class="chipsel" role="group">' + opts.map(v => '<button type="button" class="cs' + (n === v ? ' on' : '') + '" data-act="quizCount" data-arg="' + v + '" aria-pressed="' + (n === v) + '">' + (v ? v + '문제' : '전부 (' + total + ')') + '</button>').join('') +
     '<button type="button" class="cs' + (custom ? ' on' : '') + '" data-act="quizCount" data-arg="custom">' + (custom ? n + '문제' : '직접 입력') + '</button></div></div>'; };
+/* 업무 문제 내보내기: 다른 앱(엑셀·Anki·Quizlet 등)에 옮기기 좋은 형식으로 */
+const WK_FMT = { csv: ['엑셀 (CSV)', '.csv', 'text/csv'], anki: ['Anki', '-Anki.txt', 'text/plain'], quizlet: ['Quizlet · 탭 구분', '-Quizlet.txt', 'text/plain'], text: ['읽기용 텍스트', '.txt', 'text/plain'], json: ['JSON', '.json', 'application/json'] };
+function workExport(fmt, decks) {
+  const ds = decks || S.work.decks.filter(wkOn), one = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+  const csvq = v => '"' + one(v).replace(/"/g, '""') + '"';
+  if (fmt === 'json') return JSON.stringify({ app: '자기관리 업무 문제', exported: todayStr(), decks: ds.map(d => ({ name: d.name, question_label: d.ql, answer_label: d.al, cards: d.cards.map(c => Object.assign({ question: c.q, answer: c.a }, c.x ? { explanation: c.x } : {})) })) }, null, 2);
+  if (fmt === 'csv') return '\ufeff' + ['문제집,문제,정답,해설'].concat([].concat.apply([], ds.map(d => d.cards.map(c => [d.name, c.q, c.a, c.x || ''].map(csvq).join(','))))).join('\r\n');
+  if (fmt === 'anki') return '#separator:tab\n#html:true\n#deck column:1\n#tags column:4\n' + [].concat.apply([], ds.map(d => d.cards.map(c => ['업무::' + one(d.name).replace(/\s+/g, '_'), esc(one(c.q)), esc(one(c.a)) + (c.x ? '<br><br><small>' + esc(one(c.x)) + '</small>' : ''), '업무'].join('\t')))).join('\n');
+  if (fmt === 'quizlet') return [].concat.apply([], ds.map(d => d.cards.map(c => one(c.q) + '\t' + one(c.a) + (c.x ? ' — ' + one(c.x) : '')))).join('\n');
+  return ds.map(d => '■ ' + d.name + ' (' + d.cards.length + '문제)\n' + d.cards.map((c, i) => (i + 1) + '. ' + one(c.q) + '\n   → ' + one(c.a) + (c.x ? '\n   해설: ' + one(c.x) : '')).join('\n')).join('\n\n');
+}
+function sheetWkExport() {
+  const ds = S.work.decks.filter(wkOn), n = ds.reduce((t, d) => t + d.cards.length, 0);
+  const body = '<p class="cmsg">체크한 문제집 ' + ds.length + '개 · ' + n + '문제를 내보내요.</p>' +
+    Object.keys(WK_FMT).map(k => '<div class="xprow"><button type="button" class="btn ghost" data-act="wkExport" data-arg="' + k + '|save">' + WK_FMT[k][0] + ' 파일 저장</button><button type="button" class="btn ghost xpcopy" data-act="wkExport" data-arg="' + k + '|copy" aria-label="' + WK_FMT[k][0] + ' 복사">복사</button></div>').join('') +
+    '<p class="fhint">엑셀(CSV): 엑셀·구글 시트에서 열기 · Anki: 파일 → 가져오기 · Quizlet: 세트 만들기 → 가져오기에 붙여넣기(탭/줄바꿈) · 읽기용: 메모·카톡에 붙여넣기</p>';
+  openSheet('업무 문제 내보내기', body, null, { cancel: '닫기', save: '\u00a0' });
+}
 const wkOn = d => !(S.work.off || []).includes(d.id);   // 전체 풀기에 넣을 문제집 (기본은 모두)
 function viewWork() {
   const mode = ['mc', 'short', 'card'].indexOf(NAV.qm) >= 0 ? NAV.qm : 'mc', on = S.work.decks.filter(wkOn), total = on.reduce((t, d) => t + d.cards.length, 0);
@@ -1955,6 +1973,7 @@ function viewWork() {
   if (wrong) h += '<div class="chipsel" role="group"><button type="button" class="cs' + (NAV.qw ? ' on' : '') + '" data-act="quizOpt" data-arg="w|1">틀린 것만</button></div>';
   h += qCountHtml(total);
   h += bigBtn('quizStart', '__all', 'sleep', (allOn ? '전체 풀기 시작' : '선택한 ' + on.length + '개 풀기 시작')) + '<!--col-->';
+  h += '<button type="button" class="btn full ghost" data-act="wkExportSheet">다른 앱으로 내보내기</button>';
   h += '<section class="group"><div class="gsh"><span class="gt">문제집</span><span class="gc">체크한 것만 함께 풀어요</span><button type="button" class="lnk wkall" data-act="wkSelAll">' + (allOn ? '모두 해제' : '모두 선택') + '</button><button type="button" class="gadd" data-act="addWkDeck" aria-label="새 문제집">' + ico('plus', 16, 2.2) + '</button></div>' +
     (S.work.decks.length ? S.work.decks.map(d => { const r = wkRate(d), ck = wkOn(d); return '<div class="wkrow' + (ck ? '' : ' off') + '"><button type="button" class="lick" data-act="wkSel" data-arg="' + d.id + '" aria-pressed="' + ck + '" aria-label="' + esc(d.name) + (ck ? ' 빼기' : ' 넣기') + '">' + (ck ? DONE_SVG : TODO_SVG) + '</button><a href="#" class="lrow" data-act="go" data-arg="deck|' + d.id + '"><span class="lt"><span class="l1">' + esc(d.name) + '</span><span class="l2">' + d.cards.length + '문제' + (r == null ? '' : ' · 정답률 ' + r + '%') + '</span></span>' + CHEV + '</a></div>'; }).join('') : '<div class="emptyrow">문제집이 없어요</div>') + '</section>';
   return h;
@@ -3588,6 +3607,20 @@ const ACT = {
     if (NAV.route === 'quiz') render(); else ACT.go('quiz');
   },
   quizCount(arg) { if (arg === 'custom') { numSheet('몇 문제 풀까요?', '문제 수 (0 = 전부)', S.work.qn || '', v => { S.work.qn = Math.max(0, Math.round(v)); }); return; } S.work.qn = Number(arg) || 0; commit(); render(); },
+  wkExportSheet() { if (!S.work.decks.some(wkOn)) { toast('내보낼 문제집을 하나 이상 체크해 주세요'); return; } sheetWkExport(); },
+  async wkExport(arg) {
+    const p = arg.split('|'), f = WK_FMT[p[0]], text = workExport(p[0]);
+    if (!f) return;
+    if (p[1] === 'copy') { try { await navigator.clipboard.writeText(text.replace(/^\ufeff/, '')); toast('복사했어요 · 다른 앱에 붙여넣기'); } catch (e) { toast('복사가 안 돼요 · 파일 저장을 써 주세요'); } return; }
+    const name = 'work-quiz-' + todayStr() + f[1].replace('-Anki', '-anki').replace('-Quizlet', '-quizlet');   // 영문 이름: 어떤 기기에서도 깨지지 않게
+    try {
+      if (inClaude()) { const dl = await window.claude.use('downloads'); if (dl) { await dl.save({ filename: name, data: text }); return; } }
+      const url = URL.createObjectURL(new Blob([text], { type: f[2] + ';charset=utf-8' })), a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      toast(f[0] + ' 파일을 저장했어요');
+    } catch (e) { if (!e || e.code !== 'declined') toast('내보내기에 실패했어요'); }
+  },
   wkSel(arg) { const off = S.work.off = (S.work.off || []).slice(), k = off.indexOf(arg); if (k >= 0) off.splice(k, 1); else off.push(arg); commit(); render(); },
   wkSelAll() { S.work.off = S.work.decks.every(wkOn) ? S.work.decks.map(d => d.id) : []; commit(); render(); },
   quizAnswer(ok) { const Q = NAV.quiz, id = Q.ids[Q.i]; Q.st = 'done'; Q.ok1 = ok; if (ok) Q.ok++; else Q.wrong.push(id); quizRec(id, ok); render(); },

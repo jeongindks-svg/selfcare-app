@@ -1140,3 +1140,4 @@ html[data-side] .onecol:has(> .dk){max-width:1080px;margin-inline:auto}
 .qfig text.s{fill:var(--sub);font-size:11px}
 .qfig text.bt{fill:#2F7FEA}.qfig text.ot{fill:#C46F14}.qfig text.rt{fill:#E5484D}
 .qfig text.b6{font-weight:700}
+.xprow{display:flex;gap:8px;margin-bottom:8px}.xprow .btn{flex:1}.xprow .xpcopy{flex:0 0 76px}
