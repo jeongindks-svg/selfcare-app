@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = 88;   // sw.js 의 CACHE 숫자와 같이 올려요
+const APP_VERSION = 89;   // sw.js 의 CACHE 숫자와 같이 올려요
 /* ================= 유틸 ================= */
 const PAD = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + PAD(d.getMonth() + 1) + '-' + PAD(d.getDate());
@@ -18,6 +18,8 @@ const WORK_SEED = [{ id: 'hp', v: 1, name: '에어컨 용량별 마력', ql: '�
   { id: 'hole2', v: 4, noRev: true, name: '1way 모델별 타공치수', ql: '1way 모델', al: '타공치수 (mm)', cards: [['016', '860 * 380'], ['020PBH2', '860 * 380'], ['020PBH1', '1150 * 440'], ['023', '1150 * 440'], ['032', '1150 * 440'], ['040', '1150 * 440'], ['052', '1380 * 470'], ['060', '1380 * 470'], ['072', '1380 * 470']] },
   { id: 'field', v: 5, rm6: ['field6', 'field7', 'field8', 'field9', 'field10'], noRev: true, name: '시스템 에어컨 현장 용어', ql: '질문', al: '답', cards: [["냉매배관 한 조에서 가는 관은?", "액관 (리퀴드관)", "실내기 1대에 한 조로 붙어요.", "field0"], ["냉매배관 한 조에서 굵은 관은?", "가스관 (석션관)", "냉방 때 가스관이 차가워 결로가 가장 많이 생겨요.", "field1"], ["3/8\" 동관의 외경은?", "9.52 mm", "", "field2"], ["3/8\" 동관의 현장 호칭은?", "삼부", "1인치를 8부로 나눈 일본식 호칭. 1/4\" 이부, 1/2\" 사부, 5/8\" 오부.", "field3"], ["동관을 자를 때 쇠톱 대신 파이프 커터를 쓰는 이유는?", "쇳가루가 관 속에 들어가지 않게", "관 속 이물질은 팽창밸브·압축기 고장의 원인. 직각 절단도 쉬워요.", "field4"], ["보관하는 동관 끝을 캡·테이프로 막지 않으면?", "먼지·수분 유입 → 진공이 잘 안 잡히고 팽창밸브 막힘", "겉으로 멀쩡해 보여도 문제가 생기는 대표적 실수예요.", "field5"], ["용접(브레이징) 중 관 속에 질소를 흘리는 목적은?", "관 안쪽 산화 스케일(산화막) 생성 방지", "스케일은 전자팽창밸브·스트레이너를 막고 압축기를 상하게 해요.", "field11"], ["질소 대신 관에 넣으면 절대 안 되는 가스는?", "산소, 압축공기, LPG", "질소 용기 + 레귤레이터만 사용해요.", "field12"], ["질소 대신 산소를 넣으면 위험한 이유는?", "냉동기유와 만나 폭발 위험", "", "field13"], ["동관끼리 플럭스 없이 접합할 때 쓰는 용가재는?", "인동납 (BCuP)", "은이 들어간 인동납도 포함. 은납(BAg)은 서로 다른 금속을 이을 때 쓰고 플럭스가 필요해요.", "field14"], ["서비스 밸브 가까이에서 용접할 때 밸브 보호 방법은?", "젖은 천으로 감싸 열을 식힘", "열로 밸브 내부가 손상되는 것을 막아요.", "field15"], ["기밀시험 1단계 (R410A 예시)", "0.3 MPa 3분 이상", "큰 누설부터 단계적으로 확인. 기준은 냉매·제조사별로 달라요.", "field16"], ["기밀시험 2단계 (R410A 예시)", "1.5 MPa 3분 이상", "", "field17"], ["기밀시험 3단계 (R410A 예시)", "4.0 MPa 24시간", "", "field18"], ["주변 온도가 1°C 바뀔 때 시험 압력 변화는?", "약 0.01 MPa", "가압 시와 확인 시의 온도를 함께 기록해 보정해요.", "field19"], ["기밀시험 중 실외기 서비스 밸브는?", "닫아 둔다 (실외기에는 이미 냉매가 들어 있음)", "현장 배관만 시험 범위예요.", "field20"], ["압력이 떨어졌을 때 새는 곳을 찾는 기본 방법은?", "접속부에 비눗물(누설 검지액)을 발라 거품 확인", "합격 후 질소를 빼고 바로 진공 작업으로.", "field21"], ["진공 작업의 목표 진공도는?", "500 micron 이하 (약 67 Pa)", "제조사 기준이 있으면 그 값을 따라요.", "field22"], ["진공도를 정밀하게 판정하려면 어떤 게이지?", "마이크론 게이지 (진공 게이지)", "매니폴드 −76 cmHg 눈금으로는 정밀 판정이 안 돼요.", "field23"], ["펌프를 멈춘 뒤 진공도가 계속 오르면?", "누설", "정상은 거의 오르지 않고 유지돼요.", "field24"], ["펌프를 멈춘 뒤 진공도가 오르다가 멈추면?", "수분 잔류", "", "field25"], ["진공 작업을 끝낼 때 먼저 할 일은?", "밸브 먼저 닫고 펌프를 끈다", "반대로 하면 펌프 오일이 배관으로 역류해요. 펌프 오일도 주기적으로 교체.", "field26"], ["냉매 추가량 계산의 기준이 되는 관은?", "액관 (길이 기준)", "저울로 계량하고 충전량을 명판·기록지에 기록해요.", "field27"], ["R410A는 어떤 상태로 충전하나?", "액체 상태", "", "field28"], ["분기관을 '레피넷'이라고 부르는 이유는?", "특정 제조사 분기관 상표명(REFNET)이 일반 명칭처럼 굳은 말", "문서에는 '냉매 분기관' 또는 제조사 모델명을 써요.", "field29"], ["분기관 모델 선정 기준은?", "분기관 뒤에 연결되는 실내기 용량의 합계", "제조사 선정표에서 선택, 전용품만 사용.", "field30"], ["엘보 바로 뒤에 분기관을 붙이면 안 되는 이유는?", "꺾인 직후 냉매가 한쪽으로 쏠려 분배가 틀어짐", "", "field31"], ["분기관 앞 일반적인 직관 확보 길이는?", "0.5 m 이상", "분기관과 분기관 사이도 직관을 확보해요.", "field32"], ["'아마플렉스'의 정식 명칭은?", "고무발포 보온재", "'아마플렉스'는 외국 브랜드명(Armaflex)에서 온 말.", "field33"], ["액관과 가스관을 따로 보온하는 이유는?", "두 관이 서로 열을 주고받아 성능이 떨어짐", "각각 보온한 뒤 마감 테이프로 함께 감는 것은 가능해요.", "field34"], ["행거 밴드가 보온재를 눌러 결로가 생기는 것을 막는 부속은?", "보온 받침 (새들)", "보온재가 눌리면 두께가 줄어 그 자리에 결로가 생겨요.", "field35"], ["드레인 펌프가 물을 끌어올릴 수 있는 높이는?", "양정", "기종별 한도가 있으며 넘기면 물이 다 빠지지 않아요.", "field36"], ["드레인업 배관을 올린 뒤 수평으로 끌다가 다시 올리면?", "펌프가 멈출 때 관 속 물이 역류해 드레인팬이 넘침", "올릴 곳은 실내기 근처에서 한 번에, 이후는 내림 구배.", "field37"], ["덕트형 실내기 배수에 트랩이 필요한 이유는?", "음압 구조라 물이 잘 안 빠지고 넘침", "송풍기가 드레인팬 쪽 공기를 빨아들여요. 트랩(봉수)은 냄새 역류도 막아요.", "field38"], ["천장을 막기 전 드레인팬에 물을 부어 확인하는 시험은?", "통수 시험", "펌프 작동·배수·접속부 누수를 함께 확인해요.", "field39"], ["멀티에서 실내기마다 번호를 붙이는 작업의 현장 호칭은?", "어드레스 (주소 설정)", "스위치 설정 또는 자동 주소 기능으로 지정해요.", "field40"], ["실내기 어드레스(번호)가 겹치면?", "통신 에러", "", "field41"], ["중·대형 현장에서 동관을 잇는 주된 방법은?", "용접 (브레이징)", "플레어 이음은 주로 가정용·소구경에서 써요. 시스템 에어컨 현장은 대부분 질소를 흘리며 용접해요.", "field42"], ["관경이 다른 동관을 이을 때 쓰는 부속은?", "레듀샤 (리듀서)", "굵은 관과 가는 관을 이어 줘요. 분기관 세트에 함께 들어 있는 경우가 많아요.", "field43"], ["동관 끝을 넓혀 다른 관을 끼워 용접하는 가공은?", "확관 (익스팬더)", "소켓 없이 관끼리 겹쳐 끼워 용접할 수 있어요.", "field44"], ["용접 후 관 속 이물질·수분을 질소로 불어내는 작업은?", "플러싱 (질소 블로우)", "배관 연결을 마친 뒤 질소로 불어 관 속을 깨끗하게 해요.", "field45"], ["분기관은 어떤 자세로 설치하나?", "수평 또는 수직 (기울이지 않음)", "기울어지면 냉매가 한쪽으로 쏠려 분배가 틀어져요. 제조사 설명서의 허용 각도를 따라요.", "field46"], ["한 곳에서 여러 실내기로 한꺼번에 나누는 분기 부속은?", "분기 헤더 (헤더)", "분기관을 여러 번 잇는 대신 한 곳에서 나눠요.", "field47"], ["가스관이 길게 위로 올라가는 구간에 두는 오일 트랩의 역할은?", "압축기 오일 회수", "오일이 고이지 않고 실외기로 잘 돌아오게 해요. 설치 간격은 제조사 기준을 따라요.", "field48"], ["실내기와 실외기의 높이 차이(고저차)에 제한이 있는 이유는?", "오일 회수 · 냉매 흐름 문제", "허용 고저차·배관 길이는 기종마다 달라서 설계·설명서를 꼭 확인해요.", "field49"], ["냉매배관 지지(행거) 간격을 지키지 않으면?", "배관 처짐 · 진동 → 손상과 소음", "관경이 굵을수록 무거우니 지지 간격 기준을 지켜요.", "field50"], ["배관이 벽·슬래브를 지나는 곳에 하는 처리는?", "슬리브 설치 + 틈새 충전 (방화 구획은 내화 충전)", "관을 보호하고 소음·화재·누수가 번지지 않게 해요.", "field51"], ["진공 작업을 액관·가스관 양쪽에서 함께 하는 이유는?", "진공을 빠르고 확실하게 잡으려고", "배관이 길고 굵은 현장일수록 한쪽만 뽑으면 오래 걸리고 덜 빠져요.", "field52"], ["실외기 받침에 방진패드(방진가대)를 넣는 이유는?", "진동·소음이 건물로 전달되지 않게", "", "field53"], ["실외기 주변에 확보해야 하는 것은?", "흡입·토출 공간 (통풍)", "막히면 더운 바람이 다시 빨려 들어가(쇼트 서킷) 능력이 떨어지고 고압 정지가 나요.", "field54"]] },
   { id: 'slang', v: 5, name: '현장 은어 → 바른 말', ql: '현장 은어', al: '바른 말', cards: [["덴조", "천장"], ["반생", "결속선"], ["시마이", "마무리"], ["히스리", "콘크리트 깨기 (치핑)"], ["단도리", "사전 준비"], ["데모도", "조공 (보조 작업자)"]] }];
+/* 지운 문제집·문제는 '지움 표시'를 남겨서 다른 기기와 합칠 때나 업데이트 때 되살아나지 않게 해요 */
+const workPrune = w => { const del = w.del || {}; w.decks = w.decks.filter(d => !del['deck:' + d.id]); w.decks.forEach(d => { d.cards = d.cards.filter(c => !del[d.id + '|' + c.id]); }); };
 const seedDeck = d => ({ id: d.id, name: d.name, ql: d.ql, al: d.al, noRev: !!d.noRev, cards: d.cards.map((c, i) => Object.assign({ id: c[3] || d.id + i, q: c[0], a: c[1] }, c[2] ? { x: c[2] } : {})) });
 const WORK_V = 6;
 const seedWork = () => ({ decks: WORK_SEED.map(seedDeck), rec: {}, seedV: WORK_V });
@@ -119,17 +121,19 @@ function normalize(o) {
   ['exp', 'inc', 'notes'].forEach(k => { if (!Array.isArray(s.logs[k])) s.logs[k] = []; });
   if (!s.work || !Array.isArray(s.work.decks)) s.work = seedWork();
   if (!s.work.rec || typeof s.work.rec !== 'object') s.work.rec = {};
+  if (!s.work.del || typeof s.work.del !== 'object') s.work.del = {};
   if ((s.work.seedV || 1) < WORK_V) {   // 기본 문제집 추가·갱신 (한 번만)
     const sv = s.work.seedV || 1;
     WORK_SEED.forEach(d => {
       const ex = s.work.decks.find(x => x.id === d.id);
-      if (!ex) { if (d.v > sv) s.work.decks.push(seedDeck(d)); }
+      if (!ex) { if (d.v > sv && !s.work.del['deck:' + d.id]) s.work.decks.push(seedDeck(d)); }
       else if (sv < 3 && d.upd === 'replace') { const nd = seedDeck(d); ex.name = nd.name; ex.ql = nd.ql; ex.al = nd.al; ex.noRev = nd.noRev; ex.cards = nd.cards; }
       else if (sv < 6 && d.rm6) { ex.cards = ex.cards.filter(c => d.rm6.indexOf(c.id) < 0); seedDeck(d).cards.forEach(c => { if (/^field(4[2-9]|5\d)$/.test(c.id) && !ex.cards.some(y => y.id === c.id)) ex.cards.push(c); }); }
       else if (sv < 3 && d.upd === 'merge') { const nd = seedDeck(d); nd.cards.slice().reverse().forEach(c => { if (!ex.cards.some(y => y.q === c.q)) ex.cards.unshift(c); }); }
     });
     s.work.seedV = WORK_V;
   }
+  workPrune(s.work);
   if (typeof s.settings.showBudget !== 'boolean') s.settings.showBudget = true;
   if (['budget', 'prev', 'none'].indexOf(s.settings.catView) < 0) s.settings.catView = s.settings.showBudget ? 'budget' : 'none';
   if (typeof s.settings.subOn !== 'boolean') s.settings.subOn = true;
@@ -3272,9 +3276,11 @@ function mergeStates(a, b) {
   });
   unionById(out.bucket, O.bucket); unionById(out.wish, O.wish); unionById(out.plans, O.plans); unionById(out.todos, O.todos); unionById(out.reminders, O.reminders); unionById(out.sched, O.sched); unionById(out.someday, O.someday);
   out.todos.forEach(x => { const o = O.todos.find(y => y.id === x.id); if (o) { x.dn = Object.assign({}, o.dn, x.dn); x.sk = Object.assign({}, o.sk, x.sk); x.cnt = Object.assign({}, o.cnt, x.cnt); x.nt = Object.assign({}, o.nt, x.nt); } });
+  out.work.del = Object.assign({}, O.work.del, out.work.del);
   unionById(out.work.decks, O.work.decks);
   out.work.decks.forEach(d => { const o = O.work.decks.find(x => x.id === d.id); if (o) unionById(d.cards, o.cards); });
   Object.keys(O.work.rec).forEach(k => { if (!out.work.rec[k]) out.work.rec[k] = O.work.rec[k]; });
+  workPrune(out.work);
   out.theme = a.theme;
   out.updatedAt = Math.max(a.updatedAt, b.updatedAt) + 1;
   return out;
@@ -3697,8 +3703,8 @@ const ACT = {
     else if (p[0] === 'rem') S.reminders = S.reminders.filter(x => x.id !== p[1]);
     else if (p[0] === 'sch') S.sched = S.sched.filter(x => x.id !== p[1]);
     else if (p[0] === 'sd') S.someday = S.someday.filter(x => x.id !== p[1]);
-    else if (p[0] === 'wd') { S.work.decks = S.work.decks.filter(x => x.id !== p[1]); if (NAV.route === 'deck') { NAV.route = 'work'; } }
-    else if (p[0] === 'wc') { const d = S.work.decks.find(x => x.id === p[1]); if (d) d.cards = d.cards.filter(x => x.id !== p[2]); }
+    else if (p[0] === 'wd') { (S.work.del = S.work.del || {})['deck:' + p[1]] = Date.now(); S.work.decks = S.work.decks.filter(x => x.id !== p[1]); if (NAV.route === 'deck') { NAV.route = 'work'; } }
+    else if (p[0] === 'wc') { (S.work.del = S.work.del || {})[p[1] + '|' + p[2]] = Date.now(); const d = S.work.decks.find(x => x.id === p[1]); if (d) d.cards = d.cards.filter(x => x.id !== p[2]); }
     else if (p[0] === 'todo') S.todos = S.todos.filter(x => x.id !== p[1]);
     else if (p[0] === 'plan') S.plans = S.plans.filter(x => x.id !== p[1]);
     else if (p[0] === 'fixed') S.settings.fixed = S.settings.fixed.filter(x => x.id !== p[1]);
